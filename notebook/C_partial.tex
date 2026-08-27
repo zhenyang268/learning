@@ -1,0 +1,76 @@
+\section{C. 概率与测度}
+
+\subsection{C1. 概率的测度论基础}
+
+\textbf{概率空间} $(\Omega, \mathcal{F}, P)$：
+\begin{itemize}
+  \item $\Omega$：样本空间
+  \item $\mathcal{F}$：$\sigma$-代数（事件集合）
+  \item $P$：概率测度，$P(\Omega) = 1$
+\end{itemize}
+
+\textbf{随机变量：} 可测函数 $X: (\Omega, \mathcal{F}) \to (\mathbb{R}, \mathcal{B}(\mathbb{R}))$
+
+\textbf{分布函数：} $F_X(x) = P(X \leq x)$
+
+\textbf{密度函数（如果存在）：} $f_X(x) = F_X'(x)$，$P(X \in A) = \int_A f_X\,dx$
+
+\subsection{C2. 重要分布族}
+
+\begin{center}
+\begin{tabular}{p{3cm}p{5cm}p{2cm}p{3.5cm}}
+\toprule
+\textbf{分布} & \textbf{密度/质量函数} & \textbf{参数} & \textbf{应用} \\
+\midrule
+均匀 $U(a,b)$ & $\frac{1}{b-a}$ & $a, b$ & 随机采样基础 \\
+正态 $N(\mu, \sigma^2)$ & $\frac{1}{\sqrt{2\pi}\sigma}e^{-\frac{(x-\mu)^2}{2\sigma^2}}$ & $\mu, \sigma$ & 中心极限定理、噪声 \\
+指数 $\text{Exp}(\lambda)$ & $\lambda e^{-\lambda x}$ & $\lambda$ & 光子自由程 \\
+泊松 $\text{Pois}(\lambda)$ & $\frac{\lambda^k e^{-\lambda}}{k!}$ & $\lambda$ & 光子计数、散粒噪声 \\
+冯·米塞斯--费歇尔 & $C(\kappa)e^{\kappa \mu \cdot x}$（球面上） & $\kappa, \mu$ & 方向统计 \\
+GGX & $\frac{\alpha^2}{\pi(\cos^2\theta(\alpha^2-1)+1)^2}$ & $\alpha$ & 微表面 BRDF \\
+Beta & $\frac{x^{\alpha-1}(1-x)^{\beta-1}}{B(\alpha,\beta)}$ & $\alpha, \beta$ & 共轭先验 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{C3. 多维分布与独立性}
+
+$X, Y$ 独立 $\iff$ $f_{X,Y}(x,y) = f_X(x)\,f_Y(y)$ $\iff$ $F_{X,Y}(x,y) = F_X(x)\,F_Y(y)$
+
+\textbf{换元与独立性：} 设 $(U,V) = g(X,Y)$，则：
+\[
+f_{U,V}(u,v) = f_{X,Y}(g^{-1}(u,v)) \cdot |J|
+\]
+其中 $J = \det\frac{\partial(x,y)}{\partial(u,v)}$ 是雅可比行列式。
+
+\textbf{关键洞察：} 独立性不是变换不变的。极坐标变换 $(x,y) \to (r,\theta)$ 中，如果 $(X,Y)$ 是标准正态，则 $R$ 和 $\Theta$ 独立；但一般情况下换元后独立性可能被破坏或创造。
+
+在 CG 中：球面采样需要 $\theta = \arccos(1-2u_1)$，$\phi = 2\pi u_2$；雅可比行列式在路径追踪的变量替换中至关重要。
+
+\subsection{C4. 条件期望与鞅}
+
+\textbf{条件期望：} $E[X|\mathcal{G}]$ 是关于子 $\sigma$-代数 $\mathcal{G}$ 可测的随机变量，满足：
+\[
+\int_A E[X|\mathcal{G}]\,dP = \int_A X\,dP, \quad \forall A \in \mathcal{G}
+\]
+
+\textbf{鞅：} $E[X_{n+1}|\mathcal{F}_n] = X_n$
+
+在 CG 中：俄罗斯轮盘（Russian Roulette）和分裂（Splitting）的无偏性证明、路径追踪中估计量的方差分析。
+
+\subsection{C5. 随机过程}
+
+\textbf{布朗运动 $W_t$：}
+\begin{itemize}
+  \item $W_0 = 0$
+  \item 独立增量
+  \item $W_t - W_s \sim N(0, t-s)$
+  \item 路径连续但处处不可微
+\end{itemize}
+
+\textbf{随机微分方程（SDE）：}
+\[
+dX_t = \mu(X_t, t)\,dt + \sigma(X_t, t)\,dW_t
+\]
+
+在 CG 中：布朗运动（粒子模拟、烟雾）、朗之万方程（分子动力学）。

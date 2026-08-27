@@ -1,0 +1,209 @@
+\section{A. 分析学（Analysis）}
+
+\subsection{A1. 从黎曼积分到勒贝格积分}
+
+\subsubsection{黎曼积分的本质与局限}
+
+黎曼积分的核心思想：将定义域 $[a,b]$ 分割为 $n$ 个小区间，在每个小区间上取函数值乘以区间长度求和，取极限：
+\[
+\int_a^b f(x)\,dx = \lim_{\max \Delta x_i \to 0} \sum_{i=1}^n f(\xi_i)\,\Delta x_i
+\]
+
+\textbf{局限性：}
+\begin{itemize}
+  \item 黎曼可积的充要条件：$f$ 有界且不连续点集合的勒贝格测度为零（即"几乎处处连续"）
+  \item 狄利克雷函数（有理数处为 1，无理数处为 0）黎曼不可积
+  \item 黎曼积分对极限运算不友好：$f_n \to f$ 逐点收敛时，$\int f_n$ 不一定收敛到 $\int f$
+\end{itemize}
+
+\subsubsection{勒贝格积分的构造}
+
+核心思想转变：\textbf{不再分割定义域，而是分割值域。}
+
+对于函数 $f: X \to \mathbb{R}$，考虑值域中的水平集：
+\[
+E_y = \{x : f(x) > y\}
+\]
+
+勒贝格积分定义为：
+\[
+\int f\,d\mu = \int_0^\infty \mu(\{x: f(x) > t\})\,dt
+\]
+
+构造步骤：
+\begin{enumerate}
+  \item \textbf{简单函数：} $s(x) = \sum_{i=1}^n a_i \mathbf{1}_{A_i}(x)$，其中 $A_i$ 是可测集
+  \item 定义 $\int s\,d\mu = \sum a_i\,\mu(A_i)$
+  \item 对非负可测函数 $f$：$\int f\,d\mu = \sup\left\{\int s\,d\mu : 0 \leq s \leq f,\; s \text{ 简单}\right\}$
+  \item 一般函数：$f = f^+ - f^-$，分别积分
+\end{enumerate}
+
+\subsubsection{三大收敛定理}
+
+\begin{center}
+\begin{tabular}{p{3.5cm}p{5cm}p{4cm}}
+\toprule
+\textbf{定理} & \textbf{条件} & \textbf{结论} \\
+\midrule
+单调收敛定理 (MCT) & $0 \leq f_1 \leq f_2 \leq \cdots$，$f_n \to f$ & $\int f_n \to \int f$ \\
+控制收敛定理 (DCT) & $f_n \to f$ a.e.，$\exists$ 可积 $g$ 使 $|f_n| \leq g$ & $\int f_n \to \int f$ \\
+Fatou 引理 & $f_n \geq 0$ & $\int \liminf f_n \leq \liminf \int f_n$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+在 CG 中：渲染方程的蒙特卡洛估计收敛性证明依赖 DCT。
+
+\subsubsection{测度论基础}
+
+\textbf{$\sigma$-代数：} 集合 $X$ 上的 $\sigma$-代数 $\mathcal{F}$ 是 $X$ 的子集族，满足：
+\begin{itemize}
+  \item $X \in \mathcal{F}$
+  \item 对补集封闭：$A \in \mathcal{F} \Rightarrow A^c \in \mathcal{F}$
+  \item 对可数并封闭：$A_1, A_2, \ldots \in \mathcal{F} \Rightarrow \bigcup A_i \in \mathcal{F}$
+\end{itemize}
+
+\textbf{测度：} $\mu: \mathcal{F} \to [0, +\infty]$，满足：
+\begin{itemize}
+  \item $\mu(\emptyset) = 0$
+  \item 可数可加性：不相交集的测度等于测度之和
+\end{itemize}
+
+\textbf{关键测度：}
+\begin{itemize}
+  \item 勒贝格测度：$\mathbb{R}^n$ 上的"体积"
+  \item 计数测度：$\mu(A) = |A|$
+  \item 狄拉克测度：$\delta_x(A) = \mathbf{1}_A(x)$（在 CG 中用于点光源建模）
+  \item 豪斯多夫测度：用于分形维数（CG 中的分形地形）
+\end{itemize}
+
+\subsubsection{$L^p$ 空间}
+
+\[
+L^p(X, \mu) = \left\{f : \int |f|^p\,d\mu < \infty\right\} / \sim
+\]
+
+其中 $f \sim g$ 当且仅当 $f = g$ 几乎处处。
+
+\begin{itemize}
+  \item $L^1$：绝对可积函数（概率密度函数所在空间）
+  \item $L^2$：平方可积函数（\textbf{量子力学的状态空间}，信号处理的核心）
+  \item $L^\infty$：本质有界函数
+\end{itemize}
+
+\textbf{$L^2$ 是希尔伯特空间}，内积为 $\langle f, g \rangle = \int f\bar{g}\,d\mu$。这是连接分析学与量子力学的桥梁。
+
+%--------------------------------------------------------------
+\subsection{A2. 泛函分析}
+
+\subsubsection{赋范空间与巴拿赫空间}
+
+\begin{itemize}
+  \item \textbf{赋范空间：} 向量空间 + 范数 $\|\cdot\|$（满足正定性、齐次性、三角不等式）
+  \item \textbf{巴拿赫空间：} 完备的赋范空间（每个柯西序列都收敛）
+  \item 例子：$\mathbb{R}^n$（有限维），$L^p$（无限维），$C[0,1]$（连续函数空间，sup 范数）
+\end{itemize}
+
+\subsubsection{希尔伯特空间}
+
+\textbf{定义：} 完备的内积空间。
+
+\textbf{核心性质：}
+\begin{itemize}
+  \item 内积诱导范数：$\|x\| = \sqrt{\langle x, x \rangle}$
+  \item 柯西--施瓦茨不等式：$|\langle x, y \rangle| \leq \|x\|\,\|y\|$
+  \item 平行四边形法则：$\|x+y\|^2 + \|x-y\|^2 = 2\|x\|^2 + 2\|y\|^2$
+\end{itemize}
+
+\textbf{正交分解定理：} 若 $M$ 是希尔伯特空间 $H$ 的闭子空间，则 $H = M \oplus M^\perp$。
+
+这就是正交投影的严格基础——在 CG 中，最小二乘拟合、法线估计、球谐函数投影都是这个定理的应用。
+
+\subsubsection{正交基与傅里叶分析}
+
+可分希尔伯特空间存在可数正交基 $\{e_n\}$，任何元素可展开：
+\[
+f = \sum_{n} \langle f, e_n \rangle\, e_n
+\]
+
+\textbf{经典正交基：}
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{空间} & \textbf{正交基} & \textbf{应用} \\
+\midrule
+$L^2[0, 2\pi]$ & $\{e^{inx}\}$ & 傅里叶级数，信号处理 \\
+$L^2(S^2)$ & 球谐函数 $Y_l^m$ & 环境光照、PRT \\
+$L^2(\mathbb{R})$ & Hermite 函数 & 量子谐振子 \\
+$L^2[0,1]$ & Legendre 多项式 & 数值积分 \\
+$L^2(\mathbb{R}^3)$ & 平面波 $e^{i\mathbf{k}\cdot\mathbf{x}}$ & 衍射、散射 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Parseval 定理：} $\|f\|^2 = \sum |\langle f, e_n \rangle|^2$（能量守恒在频域的表述）
+
+\subsubsection{有界线性算子与谱理论}
+
+\textbf{算子：} $T: H \to H$，线性且有界（$\|Tx\| \leq C\|x\|$）。
+
+\textbf{自伴算子（Hermitian）：} $\langle Tx, y \rangle = \langle x, Ty \rangle$
+
+\textbf{谱定理（有限维）：} 自伴算子可以对角化，特征值全为实数，特征向量构成正交基。
+
+\textbf{谱定理（无限维）：} 自伴算子的谱可能是连续的。例如位置算子 $\hat{x}$ 在 $L^2(\mathbb{R})$ 上的谱是整个实数轴。
+
+\textbf{在 CG 中的应用：}
+\begin{itemize}
+  \item 拉普拉斯算子 $\Delta$ 的谱 $\to$ 网格上的振动模式 $\to$ 形状分析
+  \item 协方差矩阵的特征分解 $\to$ PCA $\to$ 降维、法线估计
+\end{itemize}
+
+\subsubsection{分布（广义函数）}
+
+\textbf{动机：} 狄拉克 $\delta$ 函数不是普通函数，但在物理中无处不在。
+
+\textbf{定义：} 分布是测试函数空间 $\mathcal{D} = C_c^\infty$ 上的连续线性泛函。
+\[
+\langle \delta, \varphi \rangle = \varphi(0)
+\]
+
+\textbf{关键分布：}
+\begin{itemize}
+  \item $\delta(x)$：点源（点电荷、点光源）
+  \item $\delta'(x)$：偶极子
+  \item $\text{p.v.}\frac{1}{x}$：主值分布
+\end{itemize}
+
+在 CG 中：点光源的辐射度用 $\delta$ 函数建模，BRDF 中的镜面反射分量包含 $\delta$ 函数。
+
+%--------------------------------------------------------------
+\subsection{A3. 微分学的高阶推广：微分形式}
+
+\textbf{0-形式：} 标量函数 $f$ \\
+\textbf{1-形式：} $\omega = P\,dx + Q\,dy + R\,dz$（对应向量场） \\
+\textbf{2-形式：} $\omega = P\,dy\wedge dz + Q\,dz\wedge dx + R\,dx\wedge dy$（对应通量） \\
+\textbf{3-形式：} $\omega = f\,dx\wedge dy\wedge dz$（对应体密度）
+
+\textbf{外微分 $d$：}
+\begin{itemize}
+  \item $df = \frac{\partial f}{\partial x}dx + \frac{\partial f}{\partial y}dy + \frac{\partial f}{\partial z}dz$（梯度）
+  \item $d(\text{1-形式})$ 对应旋度
+  \item $d(\text{2-形式})$ 对应散度
+  \item $d^2 = 0$（旋度的散度为零，梯度的旋度为零）
+\end{itemize}
+
+\textbf{广义 Stokes 定理：}
+\[
+\boxed{\int_{\partial M} \omega = \int_M d\omega}
+\]
+
+这一个公式统一了：
+\begin{itemize}
+  \item 微积分基本定理（$n=1$）
+  \item 格林公式（$n=2$）
+  \item 经典 Stokes 定理（$n=2$，三维中）
+  \item 散度定理/高斯定理（$n=3$）
+\end{itemize}
+
+在 CG 中：离散外微分（DEC）用于网格上的物理模拟、守恒律的离散保持、网格参数化。

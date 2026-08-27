@@ -2,6 +2,12 @@
 #include <math.h>
 #include <raylib.h>
 
+/*
+brew install raylib
+clang -o pendulum pendulum.c -I/opt/homebrew/include -L/opt/homebrew/lib -lraylib
+
+*/
+
 #define WIDTH 800
 #define HEIGHT 600
 #define G 9.81f

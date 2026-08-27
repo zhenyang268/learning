@@ -1,0 +1,84 @@
+\section{N. 核心公式速查表}
+
+\subsection{分析}
+\[
+\int_{\partial M} \omega = \int_M d\omega \qquad \text{（广义 Stokes）}
+\]
+\[
+\|f\|_{L^2}^2 = \sum_n |\hat{f}_n|^2 \qquad \text{（Parseval）}
+\]
+
+\subsection{代数}
+\[
+\exp: \mathfrak{g} \to G, \quad [\mathfrak{g}, \mathfrak{g}] \subset \mathfrak{g}
+\]
+\[
+SU(2) \cong \text{单位四元数}, \quad SU(2) \to SO(3) \text{（2:1 覆盖）}
+\]
+
+\subsection{概率}
+\[
+E[X] = \int_\Omega X\,dP = \int_{\mathbb{R}} x\,dF_X(x)
+\]
+\[
+\text{Var}[\hat{I}_{MC}] = \frac{1}{N}\left(\int \frac{f^2}{p}\,dx - I^2\right)
+\]
+
+\subsection{力学}
+\[
+\delta S = 0 \implies \frac{d}{dt}\frac{\partial L}{\partial \dot{q}} = \frac{\partial L}{\partial q}
+\]
+\[
+\{f, H\} = \dot{f}
+\]
+
+\subsection{量子}
+\[
+i\hbar\frac{\partial}{\partial t}|\psi\rangle = \hat{H}|\psi\rangle
+\]
+\[
+[\hat{x}, \hat{p}] = i\hbar, \quad \Delta x \cdot \Delta p \geq \frac{\hbar}{2}
+\]
+
+\subsection{渲染}
+\[
+L_o = L_e + \int_\Omega f_r\, L_i \cos\theta\, d\omega
+\]
+\[
+w_j = \frac{n_j\, p_j}{\sum_k n_k\, p_k} \qquad \text{（MIS 权重）}
+\]
+
+%==============================================================
+\section{O. 推荐学习路径}
+%==============================================================
+
+\subsection{第一阶段：夯实基础（1--2 个月）}
+\begin{enumerate}
+  \item 实分析/测度论：Folland《Real Analysis》或 Stein《Real Analysis》
+  \item 线性代数深化：Strang + Trefethen《Numerical Linear Algebra》
+  \item 概率论严格化：Durrett《Probability: Theory and Examples》
+\end{enumerate}
+
+\subsection{第二阶段：核心数学物理（2--3 个月）}
+\begin{enumerate}
+  \setcounter{enumi}{3}
+  \item 微分几何：do Carmo $\to$ Lee《Introduction to Smooth Manifolds》
+  \item 经典力学：Arnold《Mathematical Methods of Classical Mechanics》
+  \item 泛函分析：Kreyszig《Introductory Functional Analysis with Applications》
+\end{enumerate}
+
+\subsection{第三阶段：量子与场论（2--3 个月）}
+\begin{enumerate}
+  \setcounter{enumi}{6}
+  \item 量子力学：Shankar《Principles of Quantum Mechanics》或 Sakurai
+  \item 电动力学/场论：Griffiths $\to$ Baez \& Muniain《Gauge Fields, Knots and Gravity》
+\end{enumerate}
+
+\subsection{第四阶段：计算与 CG（持续）}
+\begin{enumerate}
+  \setcounter{enumi}{8}
+  \item 数值方法：Trefethen《Spectral Methods in MATLAB》+ 各种 FEM 教材
+  \item 渲染：PBRT 源码 + Kajiya 1986 原始论文
+  \item 几何处理：Botsch et al.《Polygon Mesh Processing》+ Crane 的离散微分几何课程
+  \item 物理模拟：Bridson《Fluid Simulation for Computer Graphics》+ 各种 SIGGRAPH 课程笔记
+\end{enumerate}
