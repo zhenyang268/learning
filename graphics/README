@@ -1,0 +1,15 @@
+src/
+├── camera/           # 特殊物体, camera和人眼双视角
+├── core/             # 数学、几何（矩阵、向量、四元数、射线）
+├── demo_a_triangle/  # 画一个三角形打通所有组件
+├── renderer/         # 光栅化器、帧缓冲
+├── scene/            # 场景节点、网格、材质
+├── interaction/      # 输入处理、Arcball、Ray Picking
+├── ui/               # ImGui 面板、视口窗口
+└── main.cpp
+
+ImGui
+SDL2:
+    brew install sdl2
+    brew install sdl2_image sdl2_ttf sdl2_mixer
+c++ cpu软渲染, 后续可能使用metal和opengl版本加速

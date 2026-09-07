@@ -1,18 +1,51 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
 
-# Other files and folders
+# uv
+# uv.lock 建议提交，不忽略
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# 测试与工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 环境与密钥
+.env
+.env.*
+
+# macOS / 编辑器
+.DS_Store
 .settings/
+.vscode/
+.idea/
+.continue/
 
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
+# 日志与临时文件
+*.log
+*.tmp
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# LaTeX 编译产物
+*.aux
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.synctex
+
+# 编译出的二进制（无扩展名，按需保留）
+cmath/pendulum
+cmath/pendulum1
