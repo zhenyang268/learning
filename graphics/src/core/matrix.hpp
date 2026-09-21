@@ -1,6 +1,3 @@
-#pragma once
-
-
 #include <list>
 #include <vector>
 #include <memory>
@@ -283,7 +280,7 @@ public:
     Matrix MultDiagnal(const Matrix& other)
     {
         // 特殊运算规则, 函数雅可比矩阵运算必须n*n维
-        if (this->rows != other.rows || this->rows != other.rows) {
+        if (this->rows != other.rows || this->cols != other.cols) {
             throw std::invalid_argument("Matrix dimension mismatch!");
         }
 
@@ -419,3 +416,121 @@ Matrix<T> Matrix<T>::Inverse() const
 using Matrixf = Matrix<float>;
 using Matrixd = Matrix<double>;
 using MatrixDual = Matrix<Dual<float>>;
+// 当前支持实数矩阵; 后续扩展复数/虚数矩阵与对应数值稳定求逆方法
+
+// ... existing code ...
+// 当前支持实数矩阵; 后续扩展复数/虚数矩阵与对应数值稳定求逆方法
+
+/* =====================================================================
+ * [代码评审] 检查结论与建议
+ * ---------------------------------------------------------------------
+ * 类型支持现状:
+ *   - 实数 (float / double)          : 可用
+ *   - 自动微分 (Dual<float>)         : 部分可用, SumLine/MultLine 仅对 Dual 有效
+ *   - 复数 (std::complex<float>)     : 待支持, 见 P2
+ *
+ * A. 必须修复 (编译 / 正确性)
+ *   1. 缺 #pragma once, 重复包含会报重定义
+ *   2. Inverse() 空函数体且返回 Matrix, 调用即未定义行为, 先给占位实现
+ *   3. common.hpp: DEG2RAD/RAD2DEG 宏误用 # 字符串化, 应写为
+ *      #define DEG2RAD(degree) ((degree) * PI / 180.0f)
+ *   4. friend 声明不匹配: 类内声明的是非模板友元, 文件尾定义的是函数模板,
+ *      是两个不同实体。需在类前前向声明模板, 或改为
+ *      template <typename U> friend Matrix<U> SumLine(Matrix<U>&);
+ *   5. SumLine/MultLine 内部调用 Dual 的 sumLine/multLine,
+ *      Matrix<float> 实例化会编译失败, 建议用 SFINAE/concepts 约束
+ *   6. Matrix(int, T) 与 Matrix(int, int) 重载歧义:
+ *      Matrix<float> A(3, 1) 匹配为 3x1 而非对角阵, 建议改静态工厂
+ *   7. 构造缺校验:
+ *      - (m, n, values) 未检查 values.size() == m * n
+ *      - initializer_list 未检查空表/各行长度一致
+ *      - m == 0 时 &data[0] 是 UB, 建议 data.data() 并判空
+ *   8. 移动构造: 成员初始化顺序与声明顺序不一致 (-Wreorder);
+ *      moved-from 对象应 other.matrix.clear() 避免悬空行指针
+ *   9. 缓存失效: operator[] 返回 T* 可随意写, operator+= 等也不清缓存,
+ *      cachedTranspose/cachedInverse 会给出错误结果。所有可变入口
+ *      统一调用 InvalidateCache()
+ *   10. const 正确性: Rows()/Cols()/Size()/operator+,-,*,/、
+ *       MultEach/MultDiagnal 均缺 const
+ *   11. 语义矛盾: 注释说 operator 都是逐元素运算, 但 operator* 实为矩阵乘。
+ *       建议保留 operator* = 矩阵乘 (对齐 Eigen), 逐元素乘改名
+ *       cwiseProduct(); MultDiagnal 拼写应为 Diagonal
+ *   12. dual.hpp: DualFunc<T> = std::function<T(T&)>, 数学函数建议
+ *       改为 T(const T&)
+ *   13. 死代码: _errno / decomposition / multiply_tiling / lu_inverse 等
+ *       声明未实现, 先删除或标 TODO
+ *   14. unique_ptr<Matrix> 成员依赖"析构函数在类外定义"才满足完全类型
+ *       要求, 不要把 ~Matrix() 挪回类内
+ *
+ * B. 设计建议
+ *   - 去掉 std::vector<T*> 行指针层: 行主序连续存储 + 内联 at(i, j),
+ *     更安全且同样快, 能消除大部分拷贝/移动相关的 bug 来源
+ *   - 静态工厂: Zero / Ones / Identity / Diagonal / RotationX/Y/Z /
+ *     Translate / Scale / Perspective / Ortho, 并与文件头部笔记中的
+ *     特殊矩阵快速求逆表绑定 (按 MatrixType 枚举分发)
+ *   - 补标量混合运算: friend operator*(M, scalar) / (scalar, M)
+ *   - 测试辅助: isApprox(other, eps), 容差用
+ *     std::numeric_limits<T>::epsilon() 而非全局 EPSILON
+ *   - 复数路线: MatrixTraits<T>(conj/abs/real_t 特化) +
+ *     ConjugateTranspose() + 选主元时比较 std::abs + Hermitian 正定
+ *   - Dual 选主元/判断奇异时比较 d.value, 不要直接比较 Dual
+ *   - 图形学热路径后续加固定尺寸特化 Matrix<T, 4, 4>
+ *     (std::array 存储, 零堆分配, 为 SIMD 铺路)
+ *   - OpenGL 上传为列主序: 提前决定存储顺序或上传时转置
+ *   - mutable 缓存非线程安全, 多线程场景需同步或禁用缓存
+ *
+ * =====================================================================
+ * [TODO LIST] 按优先级分阶段
+ * ---------------------------------------------------------------------
+ * P0 编译与正确性:
+ *   [ ] 加 #pragma once
+ *   [ ] Inverse() 占位实现 (返回同尺寸单位阵), 禁止空函数体
+ *   [ ] 修复 common.hpp 的 DEG2RAD / RAD2DEG 宏
+ *   [ ] 修复 friend 模板声明不匹配
+ *   [ ] 移动构造初始化顺序 + moved-from 清空行指针
+ *   [ ] 构造函数参数校验 (尺寸 / 元素数 / 空列表)
+ *   [ ] const 正确性全面清理
+ *   [ ] 统一 InvalidateCache(), 覆盖所有可变入口
+ *   [ ] 删除或标注死代码 (_errno, decomposition, multiply_tiling 等)
+ *
+ * P1 核心功能:
+ *   [ ] 静态工厂 Identity / Zero / Ones / Diagonal
+ *   [ ] 标量混合运算 + Transpose + Det 行列式
+ *   [ ] 带部分选主元的 LU (PLU) + solve(A, b) + 通用求逆
+ *   [ ] 特殊矩阵快速求逆: 对角 / 正交(转置) / 刚体分块公式,
+ *       按 MatrixType 分发 (对应文件头部的求逆方法表)
+ *   [ ] Cholesky (LLT) 对称正定求逆
+ *   [ ] QR 分解 (Householder / Givens)
+ *   [ ] isApprox + 单元测试: float / double / Dual<float> /
+ *       std::complex<float> 各跑一遍
+ *
+ * P2 特征值 / SVD (本项目核心目标):
+ *   [ ] 2x2 / 3x3 特征值解析解 (图形学, PCA 高频)
+ *   [ ] 对称矩阵 Jacobi 旋转法 (入门首选, 简单稳定)
+ *   [ ] Hessenberg 化 + 带位移 QR 算法 (一般实矩阵特征值)
+ *   [ ] 幂迭代 / 反幂迭代 (主特征值)
+ *   [ ] SVD: 先经 A^T A 特征分解实现, 后升级 Golub-Kahan 双对角化
+ *   [ ] 条件数 Cond() / 秩 Rank() / 伪逆 Pinv() (病态矩阵场景)
+ *   [ ] 复数特征值支持: std::complex 特化 + MatrixTraits
+ *
+ * P3 计算机图形学:
+ *   [ ] Quaternion<T>: 与旋转矩阵互转 + Slerp 插值
+ *   [ ] TRS decompose() 分解模型矩阵
+ *   [ ] 视图/投影矩阵工厂 + 刚体分块快速求逆
+ *   [ ] 鼠标拾取: 逆投影反推世界空间射线
+ *   [ ] 法线矩阵: 左上 3x3 的逆转置
+ *   [ ] Matrix<T, 4, 4> 固定尺寸特化 (零堆分配)
+ *
+ * P4 数学微分方程:
+ *   [ ] 矩阵指数 expm (scaling-and-squaring + Padé) -> 解 x' = Ax
+ *   [ ] ODE 积分器: Euler / RK4 (状态用 Matrix 表示), 后续辛积分器
+ *   [ ] 矩阵函数 f(A): 基于 Schur / 特征分解的函数演算
+ *   [ ] SparseMatrix<T> (大规模 PDE / 有限元)
+ *   [ ] 迭代解法: Jacobi / Gauss-Seidel / 共轭梯度 (对称正定) / GMRES
+ *
+ * P5 工程化:
+ *   [ ] CMake + GoogleTest / Catch2 单元测试
+ *   [ ] benchmark 对比 Eigen / glm
+ *   [ ] 文档与用法示例
+ * =====================================================================
+ */
