@@ -9,7 +9,7 @@
 | 仓 | 地址 | 职责 |
 |---|---|---|
 | `learning` | https://github.com/zhenyang268/learning.git （镜像 `git@gitee.com:we_we_we/learning.git`） | 主仓/后端。C++ 单一实现，出 `.so` + Python 绑定；单元测试保证接口与数据正确。含数学、图形学、笔记。 |
-| `todo` | https://github.com/zhenyang268/learning-todo.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 |
+| `todo` | https://github.com/zhenyang268/learning-todo/.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 |
 | `viz` | https://github.com/zhenyang268/learning-viz.git （待创建） | 接口/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）。 |
 | `web` | https://github.com/zhenyang268/learning-web.git （待创建） | 展示平台。统一外壳 + 模块注册，渲染知识图谱与时间轴演示；可被多个后端仓复用。 |
 | *(future) 408* | 待创建 | 另一后端内容仓，端点自备，`web` 一并托管。 |
@@ -38,7 +38,7 @@ learning/  ──构建──▶  .so + python绑定  ──被调用──▶  
 learning/                    viz/                        web/
   graphics/    C++ 引擎        cpp/    ImGui/OpenGL         shell/     外壳(导航/路由/主题)
   notebook/    LaTeX 笔记      python/ Flask / matplotlib    renderers/ graph / timeline / 专用
-  learning-todo  (子仓) session 存档   generate/ 产出完整结果          modules/   功能注册(端点+契约+渲染器)
+  learning-todo/  (子仓) session 存档   generate/ 产出完整结果          modules/   功能注册(端点+契约+渲染器)
   learning.md  数学手推清单      (契约 schema)                 assets/    贴图等(LFS/CDN)
 ```
 
@@ -49,8 +49,8 @@ learning/                    viz/                        web/
 - `AGENTS.md`（协作规约：每 session 自动加载的分层与硬规则）
 - `learning.md`（数学手推清单：12 阶段经典问题 + 6 阶段几何物理读书路线）
 - `graphics/plan.md`（C++ 工程实现里程碑：阶段 1–6 与验收节点）
-- `learning-todons-progress.md`（NS 路线进度：L0–L5 与当前位置）
-- `learning-todomatrix.md`（Matrix 库设计备忘：容器/算法/算子分层）
+- `learning-todo/ns-progress.md`（NS 路线进度：L0–L5 与当前位置）
+- `learning-todo/matrix.md`（Matrix 库设计备忘：容器/算法/算子分层）
 
 ---
 
