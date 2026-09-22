@@ -30,14 +30,15 @@ cd notebook && latexmk -pdf main.tex
 
 ## 仓库职责
 
-> `viz` 与 `web` 目前是**已建的空仓（无提交）**，只有远端地址；内容随 Gate A 之后的小项目一起起步。
+> `viz` 与 `web` 已建仓并各有首个提交（骨架 + README，2026-09-22）；
+> 首个真实内容是「笔记 web 化」的 A1 垂直切片（设计真源见 `learning-viz/python/notes_pipeline/DESIGN.md`）。
 
 | 仓 | 地址 | 职责 | 状态 |
 |---|---|---|---|
 | `learning` | https://github.com/zhenyang268/learning.git （镜像 `git@gitee.com:we_we_we/learning.git`） | 主仓/后端。C++ 单一实现，出 `.so` + Python 绑定；单元测试保证接口与数据正确。含数学、图形学、笔记。 | 开发中 |
 | `learning-todo` | https://github.com/zhenyang268/learning-todo.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 | 使用中 |
-| `learning-viz` | https://github.com/zhenyang268/learning-viz.git | 接口/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）。 | 空仓 |
-| `learning-web` | https://github.com/zhenyang268/learning-web.git | 展示平台。统一外壳 + 模块注册，渲染知识图谱与时间轴演示；可被多个后端仓复用。 | 空仓 |
+| `learning-viz` | https://github.com/zhenyang268/learning-viz.git | 接口/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）；另跑 pandoc 管线供笔记 web 化。 | 开发中 |
+| `learning-web` | https://github.com/zhenyang268/learning-web.git | 展示平台。统一外壳 + 模块注册，渲染知识图谱与时间轴演示；可被多个后端仓复用。 | 开发中 |
 | *(future) 408* | 待创建 | 另一后端内容仓，端点自备，`web` 一并托管。 | 未创建 |
 
 ---

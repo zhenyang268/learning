@@ -22,6 +22,7 @@
 | **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
 | **工程** | `graphics` 阶段 1 未动：matrix 未做实数/复数 scalar trait 改造，无 `linalg`，CMake 仍是 C++17 | CMake 升 C++20；`core/scalar.hpp` + `core/matrix.hpp` 重写 |
 | **小项目** | 未解锁 | 等 Gate A（见第 2 节） |
+| **笔记 web 化** | 两仓骨架已建（`learning-viz` / `learning-web` 各一个 init 提交），A1 垂直切片未开工 | 按 `learning-viz/python/notes_pipeline/DESIGN.md` §12 第 1 步：`uv add --dev pypandoc-binary` |
 
 > **2026-09-22 修正**：本表原先写「L1 第 3 关 —— 外测度已学、勒贝格积分刚学」，
 > 与 `ns-progress.md` 的「外测度 / Carathéodory **未接触**」**互相矛盾**。
@@ -83,7 +84,9 @@
 ## 5. 里程碑
 
 - [ ] Gate A 达成 → 启动第一个小项目（动力系统可视化）
-- [ ] 第一个小项目完成 → 拉 `viz` / `web` 多仓基建
+- [x] ~~第一个小项目完成 → 拉 `viz` / `web` 多仓基建~~
+      → **已提前至 2026-09-22**：不等 Gate A，直接以「笔记 web 化」启动两仓（理由见第 6 节日志）
+- [ ] 笔记 web 化 A1 垂直切片走完五步（`learning-viz/python/notes_pipeline/DESIGN.md` §7）
 
 ---
 
@@ -129,3 +132,20 @@
 - 仍缺、**尚未动手**的内容（下次可从这些里挑）：抽象代数（群环域、模、Galois）、图论与组合、
   凸优化与变分法系统化、数值 PDE 理论（Lax 等价定理、von Neumann 稳定性分析）、有限元理论、连续介质力学/弹性、
   复几何与辛几何、测度论进阶（Radon–Nikodym 的完整证明、乘积测度与 Fubini 的构造）、偏微分方程弱解的存在唯一（Evans Ch.6 级）。
+- **多仓基建提前启动**（本日第三次会话）：`learning-viz` 与 `learning-web` 各落一个 init 提交，
+  不再等「第一个小项目完成」。起因是拿到一份「笔记 web 化」设计（另一 session 产出，已存为
+  `learning-viz/python/notes_pipeline/DESIGN.md` 并作为该模块的设计真源）：
+  - `learning-viz`（commit `f782f4c`）：`README.md`（定位/红线/跨仓路径坑）、`.gitignore`（`dist/` 不入库）、
+    `python/` 骨架（`notes_pipeline/vendored`、`app`、`viz_modules`、`contracts`、`tests`）、
+    `python/notes_pipeline/DESIGN.md`。
+  - `learning-web`（commit `3e44024`）：`README.md`、`.gitignore`、`src/` 骨架（`shell`、`renderers`、`viz`、`modules`）+ `public/`。
+  - **不做** CDN、不做前端计算；代号（`A1`、`G1.2`）作路由 ID，不用 `§NN.N`。
+  - 设计经评审后**就地校正 10 处**（文中标 `[校正 Cn]`），要点：`pandoc --katex` 实为**客户端**渲染须改机制
+    （改走构建期 Node 预渲染 KaTeX）；filter 正则 `[A-O]` → `[A-R]`；插槽代号 `A1.1.3`/`A1.1.4` →
+    `A1.3`/`A1.4`（不存在三级代号）；`\providecommand{\vizslot}` 需加父/子**两个** `main.tex`；
+    R1「Python 3.14 缺 wheel」经 PyPI 核实**已解除**（`pypandoc-binary 1.17` 有 `py3-none-macosx_11_0_arm64.whl`、
+    `flask 3.1.3` 为 `py3-none-any`）；笔记规模由「21 文件 / 72 页 / 33 节」更正为
+    **24 内容文件 / 112 页 / 202 个 `\subsection`**。
+  - 本次只做骨架与文档治理，未装任何依赖、未改 `notebook/`；`\vizslot` 兜底与步骤 1 尚未开始。
+  - 父仓文档同步：`README.md` 两仓状态「空仓」→「开发中」；`AGENTS.md` 文档地图新增 `DESIGN.md` 一行、
+    第八节目录用途改写；本节即第 5 节里程碑提前的说明。

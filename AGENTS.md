@@ -15,9 +15,11 @@
 | `learning.md` | 数学手推题库（12 阶段经典问题 + 读书路线） | 讲数学题时，**只读相关阶段** |
 | `learning-todo/ns-progress.md` | NS 学习路线进度（L0–L5） | 推进 NS 路线时 |
 | `learning-todo/matrix.md` | Matrix 库设计的**理由**（决策与权衡） | 动 `graphics/src` 矩阵/线代代码之前 |
+| `learning-viz/python/notes_pipeline/DESIGN.md` | 笔记 web 化的架构与契约（**在子仓内**，只能按绝对路径访问） | 动 `notes_pipeline` 或 `/api/notes/*` 之前 |
 
 **真源约定（避免重复维护）**：同一条事实只在一个文件里定义，别处只引用不重述。
-进度 → `dev-progress.md`；工程验收 → `graphics/plan.md`；库设计理由 → `matrix.md`。
+进度 → `dev-progress.md`；工程验收 → `graphics/plan.md`；库设计理由 → `matrix.md`；
+笔记 web 化的架构与契约 → `learning-viz` 子仓的 `python/notes_pipeline/DESIGN.md`。
 
 ---
 
@@ -169,7 +171,8 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 - `graphics/`：C++ 图形/线代引擎（`src/`、`demo/` 为 ctest 测试程序、`test/`）
 - `linear_algebra/`：线代笔记（`.ipynb`）
 - `learning-todo/`：**独立子仓**，生成产物与待办输出（`chats/`、`imgs/`、`ns-progress.md`、`matrix.md`）
-- `learning-viz/`、`learning-web/`：同为**独立子仓**，目前都是空仓（无提交）；三者的关系与路径坑见第七节
+- `learning-viz/`、`learning-web/`：同为**独立子仓**，2026-09-22 起各有首个提交（骨架 + README），
+  内容随「笔记 web 化」切片推进；三者的关系与路径坑见第七节
 
 ---
 
