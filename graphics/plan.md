@@ -286,8 +286,8 @@
 - [ ] `graphics/CMakeLists.txt` 仍是 C++17，未升 C++20（阶段 1 任务 0）。
 - [ ] `src/core/perspective.hpp`、`rotate.hpp` 为旧接口，阶段 1 重写 matrix 时一并处置。
 - [ ] `demo/autodiff/compute_graph.cpp` 依赖旧 Matrix friend 接口，矩阵重写后需适配。
-- [ ] 仓库根目录的 `requirements`（无扩展名）与 uv 工作流重复，且用 pip 源说明 ——
-  应删除或降级为纯历史存档，避免误导 agent 走 pip 路径。
+- [x] 仓库根目录的 `requirements`（无扩展名，内容为 pip 源说明）**已于 2026-09-22 删除** ——
+  它与 `pyproject.toml` + `uv.lock` 重复，且会误导 agent 走 pip 路径。依赖一律以 uv 为准。
 - [ ] `notebook/` 文件名有两处拼写问题：`B_algbra.tex`（algebra）、`M_addtion.tex`（addition）。
   改名前需同步 `main.tex` 的 `\input`；暂不动，但引用时按现名写。
 - [ ] `§NN.N` 是编译后全局编号，**插入新 `.tex` 就会整体位移** —— 文档引用优先用文件内编号（`B1`、`G1.1`）。

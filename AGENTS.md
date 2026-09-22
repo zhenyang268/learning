@@ -126,10 +126,16 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
   父仓不跟踪（无 `.gitmodules`、无 gitlink）。
   → 它们在 `git worktree` 与新的 clone 中**都不出现**，必须用绝对路径访问
   （如 `~/develop/learning/learning-todo/`）；**改动须在各自仓内提交**。
-- **沙箱会间歇拦截 git 的 unlink/rename**，报 `Unable to create .git/index.lock`
-  或 `unable to unlink ... Operation not permitted`。
-  判别方法：shell / Python 的 unlink 都正常、只有 git 时好时坏 → 是拦截，不是文件锁。
-  **处理方式：不要诊断 ACL / flags / 文件占用，直接循环重试 1–2 次即可通过。**
+- **沙箱会拒绝 git 的索引写入**，典型输出是
+  `warning: unable to unlink '.../.git/index.lock': Operation not permitted` 加 `fatal: Unable to write new index file`。
+  - **这不是仓库问题**：`.git` 没有 `uchg/schg` 标志、没有 ACL、属主可写；
+    同一路径下 shell 的 `rm` / `mv`（含覆盖已存在文件）都成功，**只有 `git` 进程被拒**（已实测可复现）。
+  - **真正的坑是级联**：第一次失败会留下 `*.lock`，之后所有 git 命令都报
+    `Unable to create ...: File exists` / `Another git process seems to be running`——
+    看起来像随机失败，其实是第一次失败的回声。
+  - **处理**：① 用 `ls .git/*.lock .git/worktrees/*/index.lock` 查残留并删除；
+    ② 让 git 写操作在**免沙箱**下执行（会弹授权）；③ **在沙箱内单纯重试不会好转**。
+  - `GIT_OPTIONAL_LOCKS=0` 只对纯读命令（`git status`、`git diff`）有意义，对 `commit` / `update-index` 无效。
 - 全仓递归 `grep` / `ls -R` 容易被沙箱拒绝 → 改用结构化的文件检索工具。
 
 ---
