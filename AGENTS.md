@@ -33,7 +33,7 @@
 ## 目录用途
 - `notebook/`：LaTeX 笔记（.tex，已编译 main.pdf）
 - `learning-todo/`：生成产物与待办输出
-- `linear_algebra/`、`cmath/`、`graphics/`：学习笔记目录
+- `linear_algebra/`、`graphics/`：学习笔记目录
 
 ## 安全
 - 不在聊天/文件中回显完整 API Key；bl 已配置鉴权，无需在命令里传 --api-key
