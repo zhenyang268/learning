@@ -1,18 +1,44 @@
 # learning — 项目总纲
 
+> **读者**：人（项目全景）｜ **最后更新**：2026-09-22
+> 给 agent 的协作规约、目录分层与硬规则全部在 **`AGENTS.md`**（每 session 自动加载），本文不重复。
+> 真源约定：进度 → `dev-progress.md`，工程验收 → `graphics/plan.md`，库设计理由 → `learning-todo/matrix.md`。
+
 > 自学数学系（→ PDE / 图形学工程数学）的多仓学习工程：**后端算、前端看。**
+
+---
+
+## 快速开始
+
+```bash
+# 1. Python 环境（uv 管理，Python 3.14）
+uv sync
+
+# 2. 构建 C++ 引擎与 demo，跑测试
+cmake -S graphics -B graphics/build -DCMAKE_BUILD_TYPE=Debug
+cmake --build graphics/build -j
+ctest --test-dir graphics/build --output-on-failure
+
+# 3. 编译数学笔记（产出 notebook/main.pdf）
+cd notebook && latexmk -pdf main.tex
+```
+
+> 注意：**三个子仓（`learning-todo/`、`learning-viz/`、`learning-web/`）不在本仓跟踪范围内**，
+> 新 clone 或 `git worktree` 里都不会出现。它们的绝对路径通常是 `~/develop/learning/<仓名>/`。
 
 ---
 
 ## 仓库职责
 
-| 仓 | 地址 | 职责 |
-|---|---|---|
-| `learning` | https://github.com/zhenyang268/learning.git （镜像 `git@gitee.com:we_we_we/learning.git`） | 主仓/后端。C++ 单一实现，出 `.so` + Python 绑定；单元测试保证接口与数据正确。含数学、图形学、笔记。 |
-| `learning-todo` | https://github.com/zhenyang268/learning-todo.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 |
-| `viz` | https://github.com/zhenyang268/learning-viz.git （待创建） | 接口/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）。 |
-| `web` | https://github.com/zhenyang268/learning-web.git （待创建） | 展示平台。统一外壳 + 模块注册，渲染知识图谱与时间轴演示；可被多个后端仓复用。 |
-| *(future) 408* | 待创建 | 另一后端内容仓，端点自备，`web` 一并托管。 |
+> `viz` 与 `web` 目前是**已建的空仓（无提交）**，只有远端地址；内容随 Gate A 之后的小项目一起起步。
+
+| 仓 | 地址 | 职责 | 状态 |
+|---|---|---|---|
+| `learning` | https://github.com/zhenyang268/learning.git （镜像 `git@gitee.com:we_we_we/learning.git`） | 主仓/后端。C++ 单一实现，出 `.so` + Python 绑定；单元测试保证接口与数据正确。含数学、图形学、笔记。 | 开发中 |
+| `learning-todo` | https://github.com/zhenyang268/learning-todo.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 | 使用中 |
+| `learning-viz` | https://github.com/zhenyang268/learning-viz.git | 接口/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）。 | 空仓 |
+| `learning-web` | https://github.com/zhenyang268/learning-web.git | 展示平台。统一外壳 + 模块注册，渲染知识图谱与时间轴演示；可被多个后端仓复用。 | 空仓 |
+| *(future) 408* | 待创建 | 另一后端内容仓，端点自备，`web` 一并托管。 | 未创建 |
 
 ---
 
@@ -44,16 +70,6 @@ learning/                    viz/                        web/
 
 ---
 
-## 文档导航
-
-- `AGENTS.md`（协作规约：每 session 自动加载的分层与硬规则）
-- `learning.md`（数学手推清单：12 阶段经典问题 + 6 阶段几何物理读书路线）
-- `graphics/plan.md`（C++ 工程实现里程碑：阶段 1–6 与验收节点）
-- `learning-todo/ns-progress.md`（NS 路线进度：L0–L5 与当前位置）
-- `learning-todo/matrix.md`（Matrix 库设计备忘：容器/算法/算子分层）
-
----
-
 ## 工程示例（各部件承担什么）
 
 | 示例 | `learning`（后端：算） | `viz`（生成 + 本地渲染） | `web`（渲染 + 交互） |
@@ -62,7 +78,7 @@ learning/                    viz/                        web/
 | **自动微分** | `grad_graph`/`dual` → 计算 DAG + 每节点前值/微分 | 生成 DAG 结构（含数值） | 图渲染器：节点-边展示，可点节点看值/导数 |
 | **TCP 传输** | （由未来 `408` 仓承担） | （由未来 `408` 仓承担） | 时间轴渲染器：重放报文/状态动画 |
 
-> 注：TCP 的后端是 `408` 仓（承担 `learning`/`viz` 的角色），`web` 复用同一时间轴渲染器——这正是 web "多后端复用"的验证。
+> 注：TCP 的后端是 `408` 仓（承担 `learning`/`viz` 的角色），`web` 复用同一时间轴渲染器——这正是 web「多后端复用」的验证。
 
 ### 地球（唯一展开的样板）
 
@@ -87,3 +103,16 @@ learning/                    viz/                        web/
 - 天文数据（进 `learning`/`viz`）：JPL 近似轨道要素表（T2）、DE440 星历（T3）、IAU 常数。
 
 **仓库约定**：大贴图 → `web` 仓走 Git LFS/CDN；星历大文件 → 不提交、脚本下载 + 缓存；每个资源记来源 + 授权。
+
+---
+
+## 文档导航
+
+| 文件 | 一句话 |
+|---|---|
+| `AGENTS.md` | **协作规约与入口**：文档地图、命令、代号速查、硬规则、环境坑、红线 |
+| `learning.md` | 数学手推题库（12 阶段经典问题 + 6 阶段几何物理读书路线） |
+| `graphics/plan.md` | C++ 工程实现里程碑（阶段 1–6 与验收阈值 `V*`） |
+| `dev-progress.md` | **进度唯一真源**（Gate A/B/C 门槛 + 当前指针 + 进度日志） |
+| `learning-todo/ns-progress.md` | NS 路线进度（L0–L5 与当前位置） |
+| `learning-todo/matrix.md` | Matrix 库设计备忘（容器/算法/算子分层，含全部已拍板决策） |
