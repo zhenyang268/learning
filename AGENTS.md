@@ -50,11 +50,13 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 项目文档里大量使用缩写引用，释义如下：
 
 - `B1` / `G3` / `G4` / `H5` / `E1` … = `notebook/<X>_*.tex` 内的 `\subsection{X#.}` 编号
-  （`A_analysis`→A、`B_algbra`→B、`C_partial`→C、`D_classic`→D、`E_Field`→E、
+  （`A_analysis`→A、`B_algebra`→B、`C_partial`→C、`D_classic`→D、`E_Field`→E、
   `F_quantum`→F、`G_numeric`→G、`H_cg`→H、`I_fluid`→I、`J_rtx`→J、
-  `K_Feyman`→K、`L_Feyman`→L、`M_addtion`→M）
+  `K_Feyman`→K、`L_Feyman`→L、`M_addition`→M）
 - `de1`–`de4` = `notebook/diffrential/de*.tex`（拉格朗日/哈密顿篇的「第 N 层」）
 - `lie1`–`lie3` = `notebook/li/lie*.tex`（李群篇）
+  > 注：`B_algbra.tex`、`M_addtion.tex` 原为拼写错误，**已于 2026-09-22 改名为
+  > `B_algebra.tex`、`M_addition.tex`**（`main.tex` 的 `\input` 已同步）。见到旧名按新名理解。
 - `§NN.N` = **编译后**的全局章节号（`main.pdf` 里的编号），见下方警告
 - `L0`–`L5` = NS 学习路线关卡（`learning-todo/ns-progress.md`）
 - `V1.1`–`V6.4` = `graphics/plan.md` 的验收项，记作 `V{阶段}.{序号}`
@@ -76,6 +78,14 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 | 数学内容文档：`.ipynb`、`learning.md` | KaTeX：行内 `$…$`、行间 `$$…$$` |
 | 工程文档：`matrix.md`、`graphics/plan.md`、`dev-progress.md`、`AGENTS.md`、`README.md` | ASCII：`A^T`（转置）、`A^H`（共轭转置）、`[A,B] = AB − BA`（对易子） |
 | C++ 代码与注释 | 同上一行（ASCII） |
+
+**工程文档的统一细则（2026-09-22 起生效）**
+
+- **上标一律用 `^`**，不用 Unicode 上标字符：写 `A^T`、`A^H`、`A^-1`、`n^2`、`h^4`、`O(n^2)`、`|ψ|^2`、`χ^2`，
+  不写 `Aᵀ`、`Aᴴ`、`A⁻¹`、`n²`、`h⁴`、`O(n²)`、`|ψ|²`、`χ²`；`½` 写 `(1/2)`。
+- 其他符号（`∫ Σ ∇ Λ Φ θ ω μ π δ ε ∞ ≈ ≤ ≥ ⟨⟩ ‖·‖ · −`）保持现状 —— 它们不是"两套写法"，是标准数学排版字符。
+- **历史条目不动**：`ns-progress.md` 的会话日志是 append-only，旧条目里的 Unicode 写法保留原样；
+  **新写入的内容**按上面的细则来。
 
 > 判定规则很简单：**给 agent / 终端读的用 ASCII，给 Jupyter 渲染的用 KaTeX。**
 > 同一份文档内不要混用两套写法。

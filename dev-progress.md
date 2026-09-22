@@ -19,13 +19,14 @@
 
 | 线 | 当前位置 | 下一个动作 |
 |---|---|---|
-| **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | 外测度（方盒覆盖）→ Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
+| **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
 | **工程** | `graphics` 阶段 1 未动：matrix 未做实数/复数 scalar trait 改造，无 `linalg`，CMake 仍是 C++17 | CMake 升 C++20；`core/scalar.hpp` + `core/matrix.hpp` 重写 |
 | **小项目** | 未解锁 | 等 Gate A（见第 2 节） |
 
 > **2026-09-22 修正**：本表原先写「L1 第 3 关 —— 外测度已学、勒贝格积分刚学」，
 > 与 `ns-progress.md` 的「外测度 / Carathéodory **未接触**」**互相矛盾**。
 > 已改为**只留指针不做重复记录** —— 数学线的关卡状态一律以 `ns-progress.md` 为准。
+> 同日用户确认：**外测度确已学**，滞后的是 `ns-progress.md` 一侧，该文件已一并更新。
 
 **更新方式**：每次会话用户报「学到哪 / 写到哪」→ 改上表 + 在第 6 节日志追加一条。
 上表只保留**当前**状态（覆盖式），历史一律进日志（追加式，不删改）。
@@ -54,8 +55,8 @@
 
 ## 3. 现状明细（截至 2026-09-21）
 
-- **数学线**：见 `learning-todo/ns-progress.md`（截至 2026-09-18 的记载：L1 第 3 关进行中，
-  已过 σ-代数 / 测度性质 / 三大收敛定理；**外测度与 Carathéodory 尚未接触**）。
+- **数学线**：见 `learning-todo/ns-progress.md`（据 2026-09-22 用户确认：L1 第 3 关进行中，
+  已过 σ-代数 / 测度性质 / 三大收敛定理 / **外测度**；差 Vitali → Carathéodory → 积分四步构造）。
 - **工程线**：`graphics` 阶段 1 未动 —— matrix 未做实数/复数 scalar trait 改造；无 `linalg`；CMake 仍 C++17。
 
 ---
