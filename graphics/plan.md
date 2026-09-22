@@ -54,7 +54,7 @@
 - demo 注册进 ctest；公共断言工具 `demo/common.hpp`：`IsApprox(A,B,eps)`、
   随机矩阵生成（实/复/Dual 三种元素）、行列式/残差范数打印。
 - LU 主元交换正确性：与 naive 高斯消元在小矩阵上对拍。
-- 边界用例：1×1、奇异矩阵抛异常、非方阵（Transponse/Adjoint/SVD 输入）。
+- 边界用例：1×1、奇异矩阵抛异常、非方阵（Transpose/Adjoint/SVD 输入）。
 
 ---
 

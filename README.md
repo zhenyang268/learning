@@ -9,7 +9,7 @@
 | 仓 | 地址 | 职责 |
 |---|---|---|
 | `learning` | https://github.com/zhenyang268/learning.git （镜像 `git@gitee.com:we_we_we/learning.git`） | 主仓/后端。C++ 单一实现，出 `.so` + Python 绑定；单元测试保证接口与数据正确。含数学、图形学、笔记。 |
-| `todo` | https://github.com/zhenyang268/learning-todo/.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 |
+| `learning-todo` | https://github.com/zhenyang268/learning-todo.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 |
 | `viz` | https://github.com/zhenyang268/learning-viz.git （待创建） | 接口/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）。 |
 | `web` | https://github.com/zhenyang268/learning-web.git （待创建） | 展示平台。统一外壳 + 模块注册，渲染知识图谱与时间轴演示；可被多个后端仓复用。 |
 | *(future) 408* | 待创建 | 另一后端内容仓，端点自备，`web` 一并托管。 |

@@ -47,5 +47,5 @@ htmlcov/
 *.synctex
 
 # 编译出的二进制（无扩展名，按需保留）
-cmath/pendulum
-cmath/pendulum1
+graphics/test/cmath/pendulum
+graphics/test/cmath/pendulum1
