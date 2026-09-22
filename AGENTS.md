@@ -34,6 +34,7 @@
 - `notebook/`：LaTeX 笔记（.tex，已编译 main.pdf）
 - `learning-todo/`：生成产物与待办输出
 - `linear_algebra/`、`graphics/`：学习笔记目录
+- 注：`learning-todo/`、`learning-viz/`、`learning-web/` 是同级独立 git 仓（各有自己的 remote），父仓不跟踪、只是物理放在一起，新 clone/worktree 中不出现，改动需在各自仓内提交
 
 ## 安全
 - 不在聊天/文件中回显完整 API Key；bl 已配置鉴权，无需在命令里传 --api-key
