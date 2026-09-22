@@ -22,7 +22,7 @@
 | **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
 | **工程** | `graphics` 阶段 1 未动：matrix 未做实数/复数 scalar trait 改造，无 `linalg`，CMake 仍是 C++17 | CMake 升 C++20；`core/scalar.hpp` + `core/matrix.hpp` 重写 |
 | **小项目** | 未解锁 | 等 Gate A（见第 2 节） |
-| **笔记 web 化** | 两仓骨架已建（`learning-viz` / `learning-web` 各一个 init 提交），A1 垂直切片未开工 | 按 `learning-viz/python/notes_pipeline/DESIGN.md` §12 第 1 步：`uv add --dev pypandoc-binary` |
+| **笔记 web 化** | `learning-web` 已落**规约 + 设计 + 目录骨架**（`AGENTS.md` / `DESIGN.md` / `build/` / `graph/`），实现未开工 | 按 `learning-web/AGENTS.md` §12 第 1 步：`uv add --dev pypandoc-binary` |
 
 > **2026-09-22 修正**：本表原先写「L1 第 3 关 —— 外测度已学、勒贝格积分刚学」，
 > 与 `ns-progress.md` 的「外测度 / Carathéodory **未接触**」**互相矛盾**。
@@ -86,7 +86,7 @@
 - [ ] Gate A 达成 → 启动第一个小项目（动力系统可视化）
 - [x] ~~第一个小项目完成 → 拉 `viz` / `web` 多仓基建~~
       → **已提前至 2026-09-22**：不等 Gate A，直接以「笔记 web 化」启动两仓（理由见第 6 节日志）
-- [ ] 笔记 web 化 A1 垂直切片走完五步（`learning-viz/python/notes_pipeline/DESIGN.md` §7）
+- [ ] 笔记 web 化 A1 垂直切片走完七步（`learning-web/AGENTS.md` §12 / `DESIGN.md` §5）
 
 ---
 
@@ -149,3 +149,26 @@
   - 本次只做骨架与文档治理，未装任何依赖、未改 `notebook/`；`\vizslot` 兜底与步骤 1 尚未开始。
   - 父仓文档同步：`README.md` 两仓状态「空仓」→「开发中」；`AGENTS.md` 文档地图新增 `DESIGN.md` 一行、
     第八节目录用途改写；本节即第 5 节里程碑提前的说明。
+- **上一条的修正：笔记转换链路改归 `learning-web`**（本日第四次会话）。用户带来一份新的
+  `learning-web` 入口规约（比上一版细得多，含四问分级判据、掌握度 L0–L5、四类图边），
+  并拍板了它 §10 的两个未决问题：
+  - **Q1 → 本仓**：知识图谱语义边真源放 `learning-web/graph/<chapter>.yaml`（原方案放父仓 `notebook/graph/`）。
+    脱节风险由「yaml 头记 `notebook_commit` + 构建时与 `provenance.json` 比对、不一致告警」兜住。
+  - **Q2 → `build/`**：转换脚本全部放 `learning-web/build/`。**连带口径收窄**：
+    `learning-viz` 只做**计算模块**的后端（`/api/viz/*` + 本地渲染），**不再有 `/api/notes/*`**。
+    → 上一轮放在 `learning-viz/python/notes_pipeline/` 的 `DESIGN.md` 与目录**已删除**（commit `4d093e3`）。
+  - `learning-web`（commit `2a28d9f`）：新增 `AGENTS.md`（入口规约）、`DESIGN.md`（决策 D1–D8 + 契约样例 +
+    A1 切片七步验收）、`build/`（含 `vendored/`）、`graph/`；`README.md` 改为短版人读总纲。
+  - 新规约同样经评审**就地校正 9 处**（`AGENTS.md` §0.1，标 `[校正 Cn]`）：规模实测
+    **202 `\subsection` / 162 `\subsubsection` / 112 页 / 24 内容文件**（原文「36 节 / 250+ 节点」）；
+    代号只到**两级**，`A1.1.3`/`A1.1.4` → `A1.3`/`A1.4`；R1 由「高」降为「低」（PyPI 实测有 wheel）；
+    `\providecommand{\vizslot}` 要加父/子**两个** `main.tex`；R3 的三类结构分布核实
+    （A1 段内 3 张 `tabular` + 1 处 `\boxed`，`\xrightarrow` 不在 A1，在 `C`/`de4`/`P`/`Q`/`li*`）。
+  - **新发现（写进 `AGENTS.md` §6 校正 C5，是环境事实而非笔误）**：本仓与 `learning-viz` 都在父仓目录树内，
+    `uv run` 会**向上发现父仓项目**并使用 `~/develop/learning/.venv` —— 所以两仓都**不建自己的
+    `pyproject.toml`**，`uv add` 会把依赖写进**父仓** `pyproject.toml` + `uv.lock`（提交也要在父仓）。
+    已实测确认：在 `learning-web/` 下 `uv run python -c ...` 用的是 `~/develop/learning/.venv/bin/python3`。
+  - **公式渲染机制已定**（决策 D8）：`pandoc --katex` 是**客户端**渲染且默认指向 CDN，不符要求；
+    改为**构建期用 Node 跑 `katex.renderToString` 预渲染**成静态 HTML（自带
+    `<annotation encoding="application/x-tex">`，离线、无闪烁、可搜 TeX 源码）。
+  - 仍未装依赖、未改 `notebook/`；`build/` 与 `graph/` 目前是空目录。

@@ -30,15 +30,19 @@ cd notebook && latexmk -pdf main.tex
 
 ## 仓库职责
 
-> `viz` 与 `web` 已建仓并各有首个提交（骨架 + README，2026-09-22）；
-> 首个真实内容是「笔记 web 化」的 A1 垂直切片（设计真源见 `learning-viz/python/notes_pipeline/DESIGN.md`）。
+> `viz` 与 `web` 已建仓并各有提交（骨架 + 文档，2026-09-22）；
+> 首个真实内容是「笔记 web 化」的 A1 垂直切片，规约与设计真源在 `learning-web` 子仓
+> （`AGENTS.md` + `DESIGN.md`，只能按绝对路径访问）。
+>
+> **职责切分（2026-09-22 起）**：笔记的**转换链路整体归 `learning-web/build/`**；
+> `learning-viz` 收窄为**计算模块的后端**（`/api/viz/*` + 本地渲染），不再有 `/api/notes/*`。
 
 | 仓 | 地址 | 职责 | 状态 |
 |---|---|---|---|
 | `learning` | https://github.com/zhenyang268/learning.git （镜像 `git@gitee.com:we_we_we/learning.git`） | 主仓/后端。C++ 单一实现，出 `.so` + Python 绑定；单元测试保证接口与数据正确。含数学、图形学、笔记。 | 开发中 |
 | `learning-todo` | https://github.com/zhenyang268/learning-todo.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 | 使用中 |
-| `learning-viz` | https://github.com/zhenyang268/learning-viz.git | 接口/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）；另跑 pandoc 管线供笔记 web 化。 | 开发中 |
-| `learning-web` | https://github.com/zhenyang268/learning-web.git | 展示平台。统一外壳 + 模块注册，渲染知识图谱与时间轴演示；可被多个后端仓复用。 | 开发中 |
+| `learning-viz` | https://github.com/zhenyang268/learning-viz.git | 计算/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）；供 `web` 计算端点。 | 开发中 |
+| `learning-web` | https://github.com/zhenyang268/learning-web.git | 展示平台 + 笔记转换。统一外壳 + 模块注册；`build/` 把笔记转成知识图谱与阅读面。 | 开发中 |
 | *(future) 408* | 待创建 | 另一后端内容仓，端点自备，`web` 一并托管。 | 未创建 |
 
 ---
@@ -46,6 +50,9 @@ cd notebook && latexmk -pdf main.tex
 ## 项目设计
 
 - **数据流**：`learning`(纯函数) ← `viz`(生成+渲染) ← `web`(外壳+模块)。
+- **例外**：**笔记 web 化**不走上面这条链 —— 笔记是内容不是计算，其转换链路
+  （`.tex` → JSON / standalone HTML）整体在 `learning-web/build/`，只有**计算模块的演示**
+  才经 `viz` 出契约。见子仓 `learning-web/AGENTS.md` 决策 D1 / D6。
 - **原则**：
   - 单一实现 + 绑定（Python 复用 C++，仅测试层允许朴素对拍）；
   - 不重复实现；
@@ -63,10 +70,10 @@ learning/  ──构建──▶  .so + python绑定  ──被调用──▶  
 
 ```
 learning/                    viz/                        web/
-  graphics/    C++ 引擎        cpp/    ImGui/OpenGL         shell/     外壳(导航/路由/主题)
-  notebook/    LaTeX 笔记      python/ Flask / matplotlib    renderers/ graph / timeline / 专用
-  learning-todo/  (子仓) session 存档   generate/ 产出完整结果          modules/   功能注册(端点+契约+渲染器)
-  learning.md  数学手推清单      (契约 schema)                 assets/    贴图等(LFS/CDN)
+  graphics/    C++ 引擎        cpp/    ImGui/OpenGL         build/      笔记转换(Python)
+  notebook/    LaTeX 笔记      python/ app(Flask) / 模块      graph/      语义边真源(yaml)
+  learning-todo/  (子仓) session 存档   viz_modules/ 计算模块        src/        shell / renderers / viz / modules
+  learning.md  数学手推清单      contracts/ 契约 schema          dist/       产物(gitignore)
 ```
 
 ---
