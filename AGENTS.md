@@ -146,6 +146,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 - `graphics/`：C++ 图形/线代引擎（`src/`、`demo/` 为 ctest 测试程序、`test/`）
 - `linear_algebra/`：线代笔记（`.ipynb`）
 - `learning-todo/`：**独立子仓**，生成产物与待办输出（`chats/`、`imgs/`、`ns-progress.md`、`matrix.md`）
+- `learning-viz/`、`learning-web/`：同为**独立子仓**，目前都是空仓（无提交）；三者的关系与路径坑见第七节
 
 ---
 
