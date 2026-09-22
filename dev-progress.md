@@ -99,3 +99,15 @@
   （确认无独有提交，分支 `12dfde4` 已合并进 `graphics_0`）。现在只剩主仓与 `graphics-0-0c774982`。
   被删 worktree 的 `.workbuddy/memory/` 已备份到
   `graphics-0-0c774982/.workbuddy/memory/archive/2fe0063d-2026-09-22/`（含 md5 校验）。
+- `notebook/` 笔记体检与修补（commit `b899d33`，18 文件）：
+  - 修 bug：`diffrential/de4.tex` 重复的空标题「知识网络」（原 135/136 行），后续小节重编号为 25.2–25.5。
+  - 内容缺口：`A_analysis.tex` 补 σ-代数「可数并而非任意并」的理由；「可数可加性」由三行定义
+    扩为完整论证（有限可加太弱的三反例表 + 失效定理清单 + 不可数可加太强 + 集合列连续性 + Vitali 三难）。
+  - 消冗余：新增 11 个 `\label` 与 6 处指路句，打通 F→K、G→de4、H→I、B→lie1/lie2、A→de3 的重复链路。
+  - 新增 `partN.tex` §15.5「章节与教材对照索引」（教材定位表 + 精读/略读分级）。
+  - `main.tex` 给两个专题加 `\part` 分界（专题一 p.41 / 专题二 p.61），与 A.–O. 字母编号拉开层次。
+  - 顺手修两处既有缺陷：全篇 38 处 ASCII 直引号规范为中文引号；9 处被静默丢字的字符
+    （7×`↔`、2×`✓` → `\leftrightarrow` / `\checkmark`，Latin Modern 无此字形）。
+  - 校验：`latexmk -xelatex` 通过，76 页，0 缺字 / 0 Overfull / 0 未定义引用 / 0 重复标签；
+    另用 pdfpages+sips 导出关键页目视复核（p.11–12 新论证、p.39 索引表、p.41 `\part`、p.48/53 符号修复）。
+  - `.gitignore` 补 `*.xdv`（XeLaTeX 中间产物）。
