@@ -111,3 +111,21 @@
   - 校验：`latexmk -xelatex` 通过，76 页，0 缺字 / 0 Overfull / 0 未定义引用 / 0 重复标签；
     另用 pdfpages+sips 导出关键页目视复核（p.11–12 新论证、p.39 索引表、p.41 `\part`、p.48/53 符号修复）。
   - `.gitignore` 补 `*.xdv`（XeLaTeX 中间产物）。
+- `notebook/` 内容补缺（第二次会话）：用户要求把 `learning-todo/chats/` 里的「计算必修清单」落成正式章节，
+  并盘查其余缺口。新增/扩写五块，`main.pdf` 由 76 页增至 **112 页**（A–R 字母连续，两个专题顺延到 §19 起）：
+  - **P 计算必修**（`P_computation.tex`，P1–P10）：由黑板 `ses_f5e6…ipynb` md-24～md-34 转写为 LaTeX。
+    组号 **G1–G9 → P1–P9**（`G1`–`G5` 已被 `G_numeric.tex` 占用，撞名已消）；自检题按约定留在聊天/黑板，不入笔记。
+  - **C6–C10 概率深化**（扩写 `C_partial.tex`，不重编号 C1–C5，避免 A_analysis 里「→ C4」「C2 整节失效」的引用失效）：
+    收敛模式与层级 + 反例博物馆 + 均匀可积性 + Egorov/Scheffé/Vitali 收敛/单调类定理 + Borel–Cantelli + 两种大数定律、
+    特征函数与 CLT 证明、马尔可夫链与 MCMC/MLT、蒙特卡洛与方差缩减、Itô 微积分与 Fokker–Planck。
+  - **A4 Sobolev 空间与弱解**（扩写 `A_analysis.tex`）：弱导数、Sobolev 嵌入与紧嵌入、Poincaré、Lax–Milgram、正则性提升。
+  - **Q 拓扑学**（新建 `Q_topology.tex`）：点集拓扑、紧性（含与弱紧性/Arzelà–Ascoli/Rellich–Kondrachov 的对接）、
+    商空间、同伦与 $\pi_1$、单纯同调与 Euler 特征、de Rham 上同调；与 `lie2` 的「拓扑结构」明确分工。
+  - **R 复分析**（新建 `R_complex.tex`）：Cauchy 理论、留数（补上 `de3` 缺的 Laplace 反演一环）、共形映射与共形参数化、
+    解析延拓（接 K4 的 Wick 转动）、复势与二维流体。
+  - 顺带：表格定宽列统一为 `L{}`（`\raggedright`，定义在两个 `main.tex`），消除 CJK 窄列拉伸；
+    `partN.tex` 教材对照索引补 P/Q/A4/C6–C10 五行；`AGENTS.md` 代号速查补 P/Q/R。
+  - 校验：0 缺字 / 0 Overfull / 0 Underfull / 0 未定义引用 / 0 重复标签；子文档 `diffrential/main.tex` 也能独立编译（0 报错）。
+- 仍缺、**尚未动手**的内容（下次可从这些里挑）：抽象代数（群环域、模、Galois）、图论与组合、
+  凸优化与变分法系统化、数值 PDE 理论（Lax 等价定理、von Neumann 稳定性分析）、有限元理论、连续介质力学/弹性、
+  复几何与辛几何、测度论进阶（Radon–Nikodym 的完整证明、乘积测度与 Fubini 的构造）、偏微分方程弱解的存在唯一（Evans Ch.6 级）。

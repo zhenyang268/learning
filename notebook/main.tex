@@ -4,6 +4,7 @@
 \usepackage{geometry}
 \usepackage{booktabs}
 \usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}  % 定宽列，左对齐不拉伸（中文窄列表格用）
 \usepackage{enumitem}
 \usepackage{hyperref}
 \usepackage{titlesec}
@@ -42,6 +43,10 @@
 \input{L_Feyman}
 \input{M_addition}
 \input{partN}
+
+\input{P_computation}
+\input{Q_topology}
+\input{R_complex}
 
 \clearpage
 \part{专题一：微分方程——从考研套路到现代理论}

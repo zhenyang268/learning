@@ -52,11 +52,14 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 - `B1` / `G3` / `G4` / `H5` / `E1` … = `notebook/<X>_*.tex` 内的 `\subsection{X#.}` 编号
   （`A_analysis`→A、`B_algebra`→B、`C_partial`→C、`D_classic`→D、`E_Field`→E、
   `F_quantum`→F、`G_numeric`→G、`H_cg`→H、`I_fluid`→I、`J_rtx`→J、
-  `K_Feyman`→K、`L_Feyman`→L、`M_addition`→M）
+  `K_Feyman`→K、`L_Feyman`→L、`M_addition`→M、`P_computation`→P、
+  `Q_topology`→Q、`R_complex`→R）
 - `de1`–`de4` = `notebook/diffrential/de*.tex`（拉格朗日/哈密顿篇的「第 N 层」）
 - `lie1`–`lie3` = `notebook/li/lie*.tex`（李群篇）
   > 注：`B_algbra.tex`、`M_addtion.tex` 原为拼写错误，**已于 2026-09-22 改名为
   > `B_algebra.tex`、`M_addition.tex`**（`main.tex` 的 `\input` 已同步）。见到旧名按新名理解。
+  > 同类改名还有一处：**「计算必修清单」的九组原记 `G1`–`G9`，因与 `G_numeric.tex`
+  > 的 `G1`–`G5` 撞名，已统一改记为 `P1`–`P9`**（黑板里的旧编号 `G$n$` = 笔记里的 `P$n$`）。
 - `§NN.N` = **编译后**的全局章节号（`main.pdf` 里的编号），见下方警告
 - `L0`–`L5` = NS 学习路线关卡（`learning-todo/ns-progress.md`）
 - `V1.1`–`V6.4` = `graphics/plan.md` 的验收项，记作 `V{阶段}.{序号}`
