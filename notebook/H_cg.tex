@@ -137,6 +137,7 @@ Cranley--Patterson 旋转 & 随机偏移 & 去相关 \\
 \subsection{H8. 物理模拟}
 
 \subsubsection{流体模拟}
+\label{subsec:cg-fluid}
 
 \textbf{Navier--Stokes 方程（不可压缩）：}
 \[
@@ -149,6 +150,8 @@ Cranley--Patterson 旋转 & 随机偏移 & 去相关 \\
   \item $\nabla^2 p = \frac{1}{\Delta t}\nabla\cdot\mathbf{u}^*$
   \item $\mathbf{u}^{n+1} = \mathbf{u}^* - \Delta t\nabla p$
 \end{enumerate}
+
+\textbf{守恒律的完整推导、应力张量本构关系、涡量动力学与守恒性保持，见第~\ref{sec:fluid}~节（I 章）。}
 
 \subsubsection{刚体模拟}
 

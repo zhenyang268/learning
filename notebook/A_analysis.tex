@@ -11,7 +11,7 @@
 
 \textbf{局限性：}
 \begin{itemize}
-  \item 黎曼可积的充要条件：$f$ 有界且不连续点集合的勒贝格测度为零（即"几乎处处连续"）
+  \item 黎曼可积的充要条件：$f$ 有界且不连续点集合的勒贝格测度为零（即“几乎处处连续”）
   \item 狄利克雷函数（有理数处为 1，无理数处为 0）黎曼不可积
   \item 黎曼积分对极限运算不友好：$f_n \to f$ 逐点收敛时，$\int f_n$ 不一定收敛到 $\int f$
 \end{itemize}
@@ -63,15 +63,97 @@ Fatou 引理 & $f_n \geq 0$ & $\int \liminf f_n \leq \liminf \int f_n$ \\
   \item 对可数并封闭：$A_1, A_2, \ldots \in \mathcal{F} \Rightarrow \bigcup A_i \in \mathcal{F}$
 \end{itemize}
 
+\textbf{为什么是“可数”并，而不是“任意”并？} 这是为了与下面测度的\textbf{可数可加}相匹配。
+$\mathbb{R}$ 是可分的（存在可数拓扑基），每个开集都是可数个基开集之并，因此 Borel $\sigma$-代数
+完全由\textbf{可数}层级的操作生成（超限层级 $\Sigma^0_\alpha$）。若改成对\emph{任意}并封闭，
+$\mathcal{F}$ 立刻退化为幂集 $2^X$——而 Vitali 集证明：在幂集上无法同时拥有可数可加与平移不变的测度。
+反过来说，$\sigma$-代数的“可数”二字，正是为可数可加腾出的逻辑空间。
+
 \textbf{测度：} $\mu: \mathcal{F} \to [0, +\infty]$，满足：
 \begin{itemize}
   \item $\mu(\emptyset) = 0$
-  \item 可数可加性：不相交集的测度等于测度之和
+  \item \textbf{可数可加性}：若 $\{A_n\}_{n=1}^\infty \subset \mathcal{F}$ 两两不交，则
+  \[
+  \mu\Big(\bigcup_{n=1}^\infty A_n\Big) = \sum_{n=1}^\infty \mu(A_n)
+  \]
 \end{itemize}
+
+\textbf{可数可加的必要性——为什么恰好是“可数”？}\\
+可数可加是\textbf{唯一同时满足两个要求的强度}：强到足以支撑分析，弱到不排除连续测度。
+
+\textit{(1) 有限可加太弱：丢失全部极限工具。} 有限可加\emph{不}蕴含可数可加，有三个经典反例：
+
+\begin{center}
+\begin{tabular}{p{2.8cm}p{5.6cm}p{4.4cm}}
+\toprule
+\textbf{集函数} & \textbf{定义} & \textbf{失效方式} \\
+\midrule
+自然密度 & $\mu(A)=\lim\limits_{n}\frac{|A\cap\{1,\dots,n\}|}{n}$（极限存在时） &
+$\mu(\{k\})=0$ 但 $\mu(\mathbb{N})=1$ \\
+\addlinespace
+退化测度 & $\mu(A)=0$（$A$ 有限），$\mu(A)=\infty$（$A$ 无限） &
+$\mathbb{N}=\bigsqcup_k\{k\}$ 却 $\mu(\mathbb{N})=\infty \neq \sum_k 0$ \\
+\addlinespace
+Banach 测度 & $\mathbb{R}$ 上 Lebesgue 测度的有限可加扩张 &
+三个条件全满足，但无任何收敛定理 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Banach 测度说明：\emph{只}要求有限可加时，可以做得“漂亮”——但代价是\textbf{一整套定理同时失效}：
+
+\begin{center}
+\begin{tabular}{p{5.2cm}p{7.8cm}}
+\toprule
+\textbf{失去的东西} & \textbf{后果} \\
+\midrule
+MCT / Fatou / DCT & 积分与极限不能交换 $\to$ 无法做分析 \\
+$L^p$ 完备性（Riesz--Fischer） & 泛函分析地基消失 \\
+Fubini--Tonelli & 累次积分不成立 \\
+Radon--Nikodym、Lebesgue 分解 & 无“密度函数”，条件期望无法定义（$\to$ C4） \\
+Carathéodory 扩张的\textbf{唯一性} & 由区间长度构造 Lebesgue 测度时失去确定性 \\
+Kolmogorov 相容性定理 & 无穷维概率空间（布朗运动）的存在性无法保证 \\
+Borel--Cantelli、强大数定律、0--1 律 & 概率渐近理论全部失效 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{对本笔记的直接影响：} H4 蒙特卡洛积分的收敛性证明依赖 DCT，而 DCT 经 MCT 依赖可数可加。
+\textbf{有限可加下 MC 渲染没有理论保证}——这是 CG 侧最实际的理由。
+
+\textit{(2) 不可数可加太强：只剩原子测度。} 若对\emph{任意}指标集可加，则对任意 $X$：
+\[
+\mu(X) = \sum_{x\in X}\mu(\{x\})
+\]
+而非负实数族的无序求和收敛\textbf{当且仅当至多可数项非零}。于是 $\mu(\{x\})=0\ (\forall x) \Rightarrow \mu \equiv 0$：
+\begin{itemize}
+  \item Lebesgue 测度满足 $\lambda(\{x\})=0$，将被迫 $\lambda(\mathbb{R})=0$——荒谬
+  \item 正态分布等一切连续型分布被迫退化（C2 整节失效）
+  \item A2.5 的分布理论、狄拉克 $\delta$ 建模（点光源）全部无法表述
+\end{itemize}
+即：不可数可加\textbf{只允许集中在至多可数个原子上的测度}，把连续世界排除在外。
+
+\textit{(3) 可数可加的等价形式：对集合列的连续性。}
+\[
+A_n \uparrow A \implies \mu(A_n)\to\mu(A), \qquad
+A_n \downarrow \varnothing \implies \mu(A_n)\to 0
+\]
+这是理解其必要性的钥匙——\textbf{分析学的一切建立在极限上，而有限可加对极限一无所知}。
+
+\textit{(4) 代价：Vitali 三难。} 在选择公理下，
+\[
+\text{可数可加} \;+\; \text{平移不变} \;+\; \text{定义在 }\mathbb{R}\text{ 的全部子集上}
+\]
+三者\textbf{不可兼得}（Banach 测度靠放弃可数可加才同时做到）。因此我们放弃“全部子集”，
+把定义域限制为 $\sigma$-代数，并做完备化。
+
+\[
+\boxed{\text{$\sigma$-代数这个看似繁琐的概念，其存在理由正是为可数可加腾出逻辑空间。}}
+\]
 
 \textbf{关键测度：}
 \begin{itemize}
-  \item 勒贝格测度：$\mathbb{R}^n$ 上的"体积"
+  \item 勒贝格测度：$\mathbb{R}^n$ 上的“体积”
   \item 计数测度：$\mu(A) = |A|$
   \item 狄拉克测度：$\delta_x(A) = \mathbf{1}_A(x)$（在 CG 中用于点光源建模）
   \item 豪斯多夫测度：用于分形维数（CG 中的分形地形）
@@ -144,6 +226,7 @@ $L^2(\mathbb{R}^3)$ & 平面波 $e^{i\mathbf{k}\cdot\mathbf{x}}$ & 衍射、散�
 \textbf{Parseval 定理：} $\|f\|^2 = \sum |\langle f, e_n \rangle|^2$（能量守恒在频域的表述）
 
 \subsubsection{有界线性算子与谱理论}
+\label{subsec:spectral}
 
 \textbf{算子：} $T: H \to H$，线性且有界（$\|Tx\| \leq C\|x\|$）。
 
@@ -158,6 +241,8 @@ $L^2(\mathbb{R}^3)$ & 平面波 $e^{i\mathbf{k}\cdot\mathbf{x}}$ & 衍射、散�
   \item 拉普拉斯算子 $\Delta$ 的谱 $\to$ 网格上的振动模式 $\to$ 形状分析
   \item 协方差矩阵的特征分解 $\to$ PCA $\to$ 降维、法线估计
 \end{itemize}
+
+\textbf{微分算子的无穷维矩阵表示、矩阵指数与 Taylor 公式、若尔当标准型的推广，见~\ref{subsec:infdim-matrix}~节。}
 
 \subsubsection{分布（广义函数）}
 

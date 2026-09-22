@@ -26,6 +26,7 @@ $SL(n)$ & $\det=1$ 的矩阵 & $n^2-1$ & 保体积变换 \\
 \end{center}
 
 \subsubsection{李群与李代数}
+\label{subsec:lie-intro}
 
 \textbf{李群：} 既是群又是光滑流形（群运算光滑）。
 
@@ -50,6 +51,8 @@ R = \exp([\omega]_\times) = I + \frac{\sin\theta}{\theta}[\omega]_\times + \frac
 其中 $\theta = \|\omega\|$。
 
 \textbf{$SU(2)$ 与四元数：} 四元数 $q = a + bi + cj + dk$，单位四元数构成 $SU(2)$（同构）。$SU(2) \to SO(3)$ 是 2:1 的覆盖映射（旋转 $2\pi$ 后四元数变号，需要 $4\pi$ 才回到自身——自旋 $1/2$ 粒子的数学根源）。
+
+\textbf{经典李群的完整分类见第~\ref{sec:lie-group}~节；李代数结构常数、Killing 形式、Dynkin 图与表示论见第~\ref{sec:lie-algebra}~节及其后。}
 
 \subsubsection{表示论基础}
 
@@ -99,7 +102,7 @@ R = \exp([\omega]_\times) = I + \frac{\sin\theta}{\theta}[\omega]_\times + \frac
 
 \begin{itemize}
   \item \textbf{流形 $M$：} 局部像 $\mathbb{R}^n$ 的拓扑空间
-  \item \textbf{切空间 $T_pM$：} 点 $p$ 处所有"方向导数"构成的向量空间
+  \item \textbf{切空间 $T_pM$：} 点 $p$ 处所有“方向导数”构成的向量空间
   \item \textbf{切丛 $TM$：} 所有切空间的并集
   \item \textbf{余切空间 $T_p^*M$：} 切空间的对偶（1-形式生活的地方）
 \end{itemize}
@@ -130,7 +133,7 @@ R^l_{ijk} = \partial_j \Gamma^l_{ik} - \partial_k \Gamma^l_{ij} + \Gamma^m_{ik}\
 
 \subsubsection{纤维丛（Fiber Bundle）}
 
-\textbf{直觉：} 一个空间，每一点上面"粘着"一个纤维（向量空间或其他结构）。
+\textbf{直觉：} 一个空间，每一点上面“粘着”一个纤维（向量空间或其他结构）。
 
 \textbf{例子：}
 \begin{itemize}

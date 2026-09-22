@@ -4,7 +4,7 @@
 
 \subsection{从泰勒展开到 Laplace 变换：统一视角}
 
-\subsubsection{两种"将微分方程化为代数"的方法}
+\subsubsection{两种“将微分方程化为代数”的方法}
 
 \begin{center}
 \begin{tabular}{p{2cm}p{5cm}p{5cm}}
@@ -31,21 +31,21 @@ f(x + h) = e^{hD}f(x) = \sum_{n=0}^{\infty} \frac{h^n}{n!}D^n f(x)
 
 \subsubsection{Laplace 变换的算子视角}
 
-$\mathcal{L}$ 将 $D$ 变为"乘以 $s$"（减去初值项）：
+$\mathcal{L}$ 将 $D$ 变为“乘以 $s$”（减去初值项）：
 \[
 \mathcal{L}\{Df\} = s\mathcal{L}\{f\} - f(0)
 \]
 
-在"零初值"的理想情况下，$\mathcal{L}$ 将 $D$ 对角化为乘以 $s$。
+在“零初值”的理想情况下，$\mathcal{L}$ 将 $D$ 对角化为乘以 $s$。
 
 \textbf{类比：}
 \begin{itemize}
   \item Taylor/幂级数：$D$ 在基 $\{x^n/n!\}$ 下是\textbf{移位算子}
-  \item Laplace 变换：$D$ 在"指数基" $\{e^{st}\}$ 下是\textbf{乘法算子}（乘以 $s$）
-  \item Fourier 变换：$D$ 在"平面波基" $\{e^{i\xi x}\}$ 下是\textbf{乘法算子}（乘以 $i\xi$）
+  \item Laplace 变换：$D$ 在“指数基” $\{e^{st}\}$ 下是\textbf{乘法算子}（乘以 $s$）
+  \item Fourier 变换：$D$ 在“平面波基” $\{e^{i\xi x}\}$ 下是\textbf{乘法算子}（乘以 $i\xi$）
 \end{itemize}
 
-\textbf{统一：} 所有积分变换都是在找微分算子的"特征函数基"，使其对角化。
+\textbf{统一：} 所有积分变换都是在找微分算子的“特征函数基”，使其对角化。
 
 \subsubsection{复平面上的联系}
 
@@ -65,12 +65,13 @@ $\mathcal{L}$ 将 $D$ 变为"乘以 $s$"（减去初值项）：
 
 \textbf{这与特征方程的根完全对应：}
 \begin{itemize}
-  \item 特征根 $r$ ↔ Laplace 域的极点 $s = r$
-  \item 重根 ↔ 重极点 ↔ $t^k e^{rt}$
-  \item 复根 $\alpha \pm i\beta$ ↔ 共轭极点 ↔ $e^{\alpha t}\cos\beta t$
+  \item 特征根 $r$ $\leftrightarrow$ Laplace 域的极点 $s = r$
+  \item 重根 $\leftrightarrow$ 重极点 $\leftrightarrow$ $t^k e^{rt}$
+  \item 复根 $\alpha \pm i\beta$ $\leftrightarrow$ 共轭极点 $\leftrightarrow$ $e^{\alpha t}\cos\beta t$
 \end{itemize}
 
 \subsection{幂级数与无穷维矩阵}
+\label{subsec:infdim-matrix}
 
 \subsubsection{微分算子的矩阵表示}
 
@@ -146,7 +147,7 @@ a_{n+1} = \sum_{k=0}^n b_k a_{n-k} \quad \text{（递推关系）}
 
 \textbf{有限维：} 重特征值 → 若尔当块 → $t^k e^{\lambda t}$
 
-\textbf{无穷维：} 微分算子的"广义特征函数"
+\textbf{无穷维：} 微分算子的“广义特征函数”
 
 \textbf{示例：} $(D - r)^2 y = 0$
 
@@ -277,6 +278,6 @@ u = \sum_{k=0}^{\infty} \mathcal{K}^k g
 
 \textbf{类比：}
 \begin{itemize}
-  \item ODE 的 Picard 迭代 ↔ 积分方程的 Neumann 级数 ↔ 路径追踪的弹射展开
+  \item ODE 的 Picard 迭代 $\leftrightarrow$ 积分方程的 Neumann 级数 $\leftrightarrow$ 路径追踪的弹射展开
   \item 收敛条件：$\|\mathcal{K}\| < 1$（算子范数）
 \end{itemize}

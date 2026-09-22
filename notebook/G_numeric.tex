@@ -28,6 +28,7 @@ x_{n+1} &= x_n + v_{n+1/2} h
 辛积分器能量在 bounded 范围内振荡，不会系统性漂移。布料模拟、刚体模拟、粒子系统都用辛积分器。
 
 \subsection{G2. 偏微分方程数值解}
+\label{subsec:pde-numerics}
 
 \subsubsection{有限差分法（FDM）}
 
@@ -50,6 +51,8 @@ x_{n+1} &= x_n + v_{n+1/2} h
 \subsubsection{谱方法}
 
 用全局正交基（傅里叶、切比雪夫、球谐）展开解。对光滑解指数收敛。
+
+\textbf{有限差分/有限元/谱方法的稳定性分析、格式对比与半拉格朗日方法，见第~\ref{sec:de-numerics}~节（第八层：数值方法）。}
 
 \subsection{G3. 数值线性代数}
 

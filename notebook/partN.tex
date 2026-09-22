@@ -82,3 +82,48 @@ w_j = \frac{n_j\, p_j}{\sum_k n_k\, p_k} \qquad \text{（MIS 权重）}
   \item 几何处理：Botsch et al.《Polygon Mesh Processing》+ Crane 的离散微分几何课程
   \item 物理模拟：Bridson《Fluid Simulation for Computer Graphics》+ 各种 SIGGRAPH 课程笔记
 \end{enumerate}
+
+\clearpage
+\subsection{章节与教材对照索引}
+
+读某一节卡住时，按下表直接翻到对应位置，不必通读全书。
+（章节代号用笔记内的局部编号：“A1” 指 A 篇第 1 小节，“A1.5” 指其下第 5 小目。）
+
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.9cm}>{\raggedright\arraybackslash}p{5.2cm}>{\raggedright\arraybackslash}p{5.5cm}}
+\toprule
+\textbf{本笔记章节} & \textbf{首选教材} & \textbf{对应位置} \\
+\midrule
+A1 测度与勒贝格积分 & Folland \emph{Real Analysis} & Ch.1--2（\S1.4 外测度、\S2.4 收敛定理） \\
+A1.5 $L^p$ 空间 & Folland & Ch.6（\S6.3 插值可略） \\
+A2 泛函分析 & Kreyszig & Ch.2--3（赋范/内积）、Ch.7（谱理论） \\
+A2.4 谱理论（进阶） & Reed--Simon Vol.1 & Ch.VI--VIII \\
+A3 微分形式 & Lee \emph{Smooth Manifolds} & Ch.14（形式）、Ch.16--17（de Rham 与积分） \\
+B1 李群与李代数 & Lee \emph{Smooth Manifolds} & Ch.7--8 \\
+B1.3 表示论 & Hall \emph{Lie Groups, Lie Algebras} & Ch.3--5 \\
+B2 曲线曲面 & do Carmo & Ch.1--2、Ch.4（内蕴几何） \\
+B2.3 黎曼几何 & Lee \emph{Riemannian Manifolds} & Ch.3--6 \\
+C1--C4 概率的测度论基础 & Durrett & Ch.1--2、Ch.4（条件期望）、Ch.5（鞅） \\
+D1--D3 经典力学 & Arnold & Ch.1--3（含 Noether 定理） \\
+E1--E2 场论与微分形式 & Baez \& Muniain & Part I--II \\
+F1--F4 量子力学 & Shankar & Ch.1--7、Ch.12（角动量） \\
+G1--G5 数值方法 & Trefethen \emph{Spectral Methods} / \emph{Num.\ Lin.\ Alg.} & 谱方法全书；线代 Ch.1--20 \\
+H1 离散微分几何 & Botsch et al. \emph{Polygon Mesh Processing} & Ch.2--3 \\
+H2--H4 渲染方程 & Kajiya 1986 & \emph{The Rendering Equation}（11 页，必读原文） \\
+H4 MIS & Veach 1997 博士论文 & Ch.9（MIS 的出处） \\
+I1--I4、I9 流体力学 & Bridson \emph{Fluid Simulation for CG} & 全书（偏实现） \\
+K1--K4 路径积分、L1--L8 QFT & Peskin \& Schroeder & Ch.9（路径积分）、Ch.4--7（Feynman 规则） \\
+de1--de4 微分方程专题 & 丁同仁《常微分方程教程》 + Evans \emph{PDE} & 丁 Ch.1--4；Evans Ch.2（分类）、Ch.5--6（弱解） \\
+lie1--lie3 李群专题 & Hall & 全书（比 B1 深一档） \\
+M6 离散外微分 & Crane 的 DDG 课程笔记 & 前 5 讲 \\
+M7 变分积分器 & Hairer--Lubich--Wanner \emph{GNI} & Part I Ch.III（辛积分器） \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{精读/略读分级：}
+\begin{itemize}
+  \item \textbf{必须自己推一遍：} A1.3 三大收敛定理、A1.4 可数可加的必要性、B1.2 指数映射与 Rodrigues 公式、H4 重要性采样方差
+  \item \textbf{看结论即可：} A2.4 无限维谱定理、E3 闵可夫斯基时空、L7 重整化、M2 黑体辐射
+  \item \textbf{写代码时再查：} G 全章、H1 离散算子权重、I9 守恒性格式、M4 LCP 求解器
+\end{itemize}
