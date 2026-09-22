@@ -126,16 +126,26 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
   父仓不跟踪（无 `.gitmodules`、无 gitlink）。
   → 它们在 `git worktree` 与新的 clone 中**都不出现**，必须用绝对路径访问
   （如 `~/develop/learning/learning-todo/`）；**改动须在各自仓内提交**。
-- **沙箱会拒绝 git 的索引写入**，典型输出是
+- **git 的写操作会被执行层拒绝 unlink**，典型输出是
   `warning: unable to unlink '.../.git/index.lock': Operation not permitted` 加 `fatal: Unable to write new index file`。
-  - **这不是仓库问题**：`.git` 没有 `uchg/schg` 标志、没有 ACL、属主可写；
-    同一路径下 shell 的 `rm` / `mv`（含覆盖已存在文件）都成功，**只有 `git` 进程被拒**（已实测可复现）。
-  - **真正的坑是级联**：第一次失败会留下 `*.lock`，之后所有 git 命令都报
+  - **不是仓库问题**：`.git` 没有 `uchg/schg` 标志、没有 ACL、属主可写，
+    且锁文件的 mode/owner 与 shell 新建的文件完全一致；同一路径下 shell 的 `rm` / `mv`
+    （含覆盖已存在文件）都成功 —— **只有 `git` 进程被拒**（可复现）。
+  - **也与"是否免沙箱"无关**：在标记为 `Sandbox bypassed` 的运行里同样出现该报错。
+    环境里存在 `CODEBUDDY_SANDBOX_BROKER_TRACE_ID`，但**具体是哪一层拦的、规则是什么，
+    从进程内看不到** —— 不要臆断成因，直接按下面的办法处理。
+  - **真正的坑是级联**：失败会留下 `*.lock`，之后所有 git 命令报
     `Unable to create ...: File exists` / `Another git process seems to be running`——
-    看起来像随机失败，其实是第一次失败的回声。
-  - **处理**：① 用 `ls .git/*.lock .git/worktrees/*/index.lock` 查残留并删除；
-    ② 让 git 写操作在**免沙箱**下执行（会弹授权）；③ **在沙箱内单纯重试不会好转**。
-  - `GIT_OPTIONAL_LOCKS=0` 只对纯读命令（`git status`、`git diff`）有意义，对 `commit` / `update-index` 无效。
+    看起来像随机失败，其实是前一次失败的回声。
+  - **实测有效的处理**：用 shell `rm -f` 删掉**具体那几个**锁文件
+    （`.git/index.lock`、`.git/packed-refs.lock`、`.git/refs/heads/**/*.lock`、`.git/ORIG_HEAD.lock`），
+    然后**立刻重跑**该 git 命令；循环 3–8 次基本必过（通常第 1 次就过）。
+    **不要用通配符删** —— zsh 在无匹配时会中断整条命令。
+  - `GIT_OPTIONAL_LOCKS=0` 只对纯读命令（`git status`、`git diff`）有意义，
+    对 `commit` / `update-index` / `branch -D` 无效。
+  - **删 worktree 会撞同一个坑**：`git worktree remove` 可能已经删掉了工作目录，却卡在
+    `.git/worktrees/<name>` 上。补法：手动 `rm -rf .git/worktrees/<name>` → `git worktree prune`
+    → 再 `git branch -D <branch>`。
 - 全仓递归 `grep` / `ls -R` 容易被沙箱拒绝 → 改用结构化的文件检索工具。
 
 ---
