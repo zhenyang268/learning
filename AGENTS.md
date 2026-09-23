@@ -15,9 +15,12 @@
 | `learning.md` | 数学手推题库（12 阶段经典问题 + 读书路线） | 讲数学题时，**只读相关阶段** |
 | `learning-todo/ns-progress.md` | NS 学习路线进度（L0–L5） | 推进 NS 路线时 |
 | `learning-todo/matrix.md` | Matrix 库设计的**理由**（决策与权衡） | 动 `graphics/src` 矩阵/线代代码之前 |
+| `learning-web/AGENTS.md` | 笔记 web 化的**入口规约**（真源约定、四问判据、硬规则、红线）｜ 在子仓内，只能按绝对路径访问 | 动 `learning-web` 任何东西之前 |
+| `learning-web/DESIGN.md` | 笔记 web 化的架构与契约（决策 D1–D8、数据流、契约样例、A1 切片验收） | 动契约 / 渲染器 / `build/` 之前 |
 
 **真源约定（避免重复维护）**：同一条事实只在一个文件里定义，别处只引用不重述。
-进度 → `dev-progress.md`；工程验收 → `graphics/plan.md`；库设计理由 → `matrix.md`。
+进度 → `dev-progress.md`；工程验收 → `graphics/plan.md`；库设计理由 → `matrix.md`；
+笔记 web 化 → `learning-web` 子仓（规约 `AGENTS.md`、设计 `DESIGN.md`）。
 
 ---
 
@@ -169,7 +172,12 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 - `graphics/`：C++ 图形/线代引擎（`src/`、`demo/` 为 ctest 测试程序、`test/`）
 - `linear_algebra/`：线代笔记（`.ipynb`）
 - `learning-todo/`：**独立子仓**，生成产物与待办输出（`chats/`、`imgs/`、`ns-progress.md`、`matrix.md`）
-- `learning-viz/`、`learning-web/`：同为**独立子仓**，目前都是空仓（无提交）；三者的关系与路径坑见第七节
+- `learning-viz/`：**独立子仓**，2026-09-22 起有提交。职责**收窄为计算/生成层**（Flask `/api/viz/*` +
+  ImGui/matplotlib 本地渲染）；**不再承担笔记转换**（`notes_pipeline` 已移出）
+- `learning-web/`：**独立子仓**，2026-09-22 起有提交。笔记 web 化的全部落地：
+  `build/`（转换，Python）+ `graph/`（语义边真源）+ `src/`（Vite 外壳）+ `dist/`（产物，gitignore）
+- 三者的关系与路径坑见第七节；依赖约定：两个子仓都不建自己的 `pyproject.toml`，
+  `uv add` 会写进**父仓** `pyproject.toml` + `uv.lock`
 
 ---
 
@@ -194,3 +202,22 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 
 - 不在聊天或文件中回显完整 API Key，也不要输出 `.env` 的内容。
 - `bl` 已配置好鉴权，**无需**在命令里传 `--api-key`。
+
+---
+
+## 十二、文档体检（会话收尾时顺手做）
+
+低频即可（每次大改后，或每月一次）。下面每一条都是**本仓已经发生过**的漂移类型：
+
+1. **`dev-progress.md` 的勾选/复述 ↔ `learning-todo/ns-progress.md`**
+   —— 数学线明细只能存在于后者，前者只留指针。（2026-09-23 修过一次：§4 的 `- [ ]` 清单长期挂着
+   「外测度未学」，与 §0 指针矛盾。）
+2. **入口文件体积** —— 本文件目标 ≤ 15 KB；`learning-web/AGENTS.md` 超阈值时按其 §11 把「设计」
+   外移到同仓 `DESIGN.md`，入口只留规约与指针。
+3. **状态措辞 ↔ 文件实际存在** —— 「空仓 / 待建 / 无提交」这类话，子仓一有提交就要同步
+   本文件第八节与 `README.md` 的仓库职责表。
+4. **待办草案 ↔ 已落地内容** —— `.opencode/plans/`、`learning-todo/` 里的草案一旦落进
+   `notebook/*.tex`，立刻标注「已完成」并指向真源，避免留下第二份过期等效数据。
+5. **代号层级** —— 出现 `X#.k.j` 三级写法即错误（只到两级）。
+6. **`learning.md`（46 KB）** —— 目前靠「只读相关阶段」的约定控制成本；若将来拆成目录分文件，
+   所有引用它的文档要同步。
