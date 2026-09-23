@@ -54,3 +54,13 @@ htmlcov/
 # 编译出的二进制（无扩展名，按需保留）
 graphics/test/cmath/pendulum
 graphics/test/cmath/pendulum1
+
+# 父仓不跟踪的目录（三个独立子仓 + 第三方源码）
+#   ⚠️ 不加这几行时它们会一直显示为 ??；
+#   一旦误跑 `git add -A`，会被当作 embedded repo 写出 gitlink 进索引，
+#   而 AGENTS.md 第九节明确要求「无 .gitmodules、无 gitlink」。
+#   三子仓改动一律在各自仓内提交，见 AGENTS.md 第七节。
+learning-todo/
+learning-viz/
+learning-web/
+graphics/third_party/
