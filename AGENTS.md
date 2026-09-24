@@ -186,6 +186,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 - **`Matrix<T>` 的既定设计**（哑容器、不加缓存层、不把算法塞进类、实复差异只走 traits）：
   这些已在 `matrix.md` 里定稿并给出理由。需要改设计，**先改 `matrix.md` 并写清理由**，再动代码。
 - **已写好的 `.ipynb` 单元**：只追加新单元，不重写旧单元。
+- **新增要求, notebook目录下的笔记非明确指示, 不进行修改了**
 
 ---
 
