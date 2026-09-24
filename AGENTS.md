@@ -42,7 +42,7 @@ uv run pytest                               # Python 测试
 cmake -S graphics -B graphics/build -DCMAKE_BUILD_TYPE=Debug
 cmake --build graphics/build -j             # 构建 C++ 库与 demo
 ctest --test-dir graphics/build --output-on-failure   # 跑 C++ 测试
-latexmk -pdf main.tex                       # 编译笔记（在 notebook/ 下执行）
+latexmk -pdfxe -interaction=nonstopmode main.tex   # 编译笔记（notebook/ 下执行；必须 xelatex 引擎——`-pdf` 走 pdfLaTeX 会报 ctex `fontset 'mac' unavailable` 直接卡住等交互输入，2026-09-24 实测）
 bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048"
 ```
 
