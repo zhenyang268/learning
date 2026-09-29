@@ -90,7 +90,22 @@
 
 ## 6. 进度日志（append-only：只追加，不修改历史条目）
 
-### 2026-09-22
+### 2026-09-29
+
+- **设计落档（工程线，文档层）**：`learning-todo/matrix.md` 并入第二轮泛型数值库评审定稿
+  **D11–D18**（learning-todo 子仓 commit `a6f089c`，+133/−13）：
+  - 新增 §1.4 标量层细则（D11 Smith 除法 / D12 除零两层 / D13 禁 is_xxx 探测 /
+    D15 混合运算 / D16 四元数封死 / D18 命名收敛）、§2.5 BlockView 视图（D17）、
+    §3.4 特征值 tag dispatch（D14）；§0 宪法补「分块靠视图不嵌套」；§8 决策表扩到 18 条。
+  - §7 重写为 Dual 六条细化清单（对着 `dual.hpp` 现码逐条锚定：删 operator/ 的 ==0
+    吞错分支、字面量走 traits、std::sin 改 ADL 两步法、sumLine/multLine 迁
+    jacobian.hpp 并修 multLine 零因子除零 bug、DualFunc 签名改 T(const T&)、
+    新增 ScalarTraits<Dual<T>> 逐分量共轭）。
+- `graphics/plan.md` V1.5 补复数求导用例（父仓 commit `a7277d4`）：
+  z² 单种子（全纯）、|z|² 双种子（非全纯）与解析值对拍，阈值 value 1e-12 / derive 1e-10。
+- 工程代码仍未动（`scalar.hpp` / `complex/` / `linalg/` 均不存在）；
+  下一步按 `matrix.md` §9 顺序动代码：CMake 升 C++20 → scalar.hpp → complex.hpp →
+  matrix.hpp 重写 → dual.hpp 修 → linalg 四件套 → V1.1–V1.7。
 
 - 文档治理：统一四层结构（入口 `AGENTS.md` / 真源 `README.md`+本文 / 展开 `plan.md`+`learning.md`+`matrix.md` / 产物 `learning-todo/`）。
 - 本次改动不动学习进度，仅治理文档；`plan.md` 的验收项编号由 `A1`–`F4` 改为 `V{阶段}.{序号}`，
