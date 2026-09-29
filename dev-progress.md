@@ -103,6 +103,10 @@
     新增 ScalarTraits<Dual<T>> 逐分量共轭）。
 - `graphics/plan.md` V1.5 补复数求导用例（父仓 commit `a7277d4`）：
   z² 单种子（全纯）、|z|² 双种子（非全纯）与解析值对拍，阈值 value 1e-12 / derive 1e-10。
+- `matrix.md` 新增 **§10 C++ 特性注解**（learning-todo 子仓 commit `e7ec45d`）：
+  用户尚未掌握文中涉及的 C++ 特性，按「先讲解决什么问题、再讲最小语法、标注本库落点」
+  写了 9 小节（模板全特化/偏特化/typename/concept+requires/if constexpr/ADL 两步法/
+  tag dispatch/numeric_limits·enum class·static_assert/两条写码纪律），正文 7 处加指路。
 - 工程代码仍未动（`scalar.hpp` / `complex/` / `linalg/` 均不存在）；
   下一步按 `matrix.md` §9 顺序动代码：CMake 升 C++20 → scalar.hpp → complex.hpp →
   matrix.hpp 重写 → dual.hpp 修 → linalg 四件套 → V1.1–V1.7。
