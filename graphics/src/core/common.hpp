@@ -4,13 +4,27 @@
 #include <cstring>
 #include <iostream>
 #include <initializer_list>
+#include <numbers>
+#include <cassert>
+#include <limits>
 
-constexpr float PI = 3.14159265358979323846f;
-#define DEG2RAD(degree) #degree * PI / 180.0f
-#define RAD2DEG(rad) #rad * 180.0f / PI
-constexpr float EPSILON = 1e-6f;
+constexpr float NaN = std::numeric_limits<float>::quiet_NaN();
+constexpr double NaN_D = std::numeric_limits<double>::quiet_NaN();
+constexpr float Inf = std::numeric_limits<float>::infinity();
+constexpr double Inf_D = std::numeric_limits<double>::infinity();
 
-enum MatrixType
+constexpr float PI = std::numbers::pi_v<float>;
+constexpr double PI_D = std::numbers::pi_v<double>;
+
+#define DEG2RAD(degree) (degree) * PI / 180.0f
+#define RAD2DEG(rad) (rad) * 180.0f / PI
+
+constexpr float EPSILON = std::numeric_limits<float>::epsilon();
+constexpr double EPSILON_D = std::numeric_limits<double>::epsilon();
+
+
+// 不能按用途去分, 怎么用是上层的责任, 可以提供静态工厂辅助生成
+enum class MatrixType
 {
     General,                // 通用矩阵
     Rotation,               // 旋转矩阵
@@ -22,28 +36,47 @@ enum MatrixType
     SymmetricPositive,      // 对称正定矩阵
 };
 
+enum class MatrixKind 
+{ 
+    Generic,
+    Diagonal,
+    Orthogonal, /*酉*/
+    RigidTransform,
+    SymmetricPositiveDefinite, /*Hermitian正定*/
+    Projection 
+};
+
 // 单元操作直接定义在Dual类的友元函数中, Dual.sin
 // 多元函数操作定义在Matrix类的友元函数中, Matrix<T>.SumAll
-enum GradOp
+enum class GradOp
 {
-    Input,          // 输入行
-    Output,         // 输出行
-    Constant,       // 线性关系中的常数, 按参数处理
+    Input,          // 输入节点
     Add,
     Sub,
-    Mult,           // 逐元素乘法
-    Devide,
+    CWiseMult,      // 逐元素乘法
+    CWisePow,       // 逐元素幂运算
+    Divide,
     MatrixMult,     // 可以实现mask和choose, 比如x 10维,可以只取0 1 2三维
-    Transpose,
-    Inverse,
+    Transpose,      // 转置是线性变换
+    Inverse,        // 求逆用伴随内积配对不变
     Sigmoid,
     Relu,
     Tanh,
     Softmax,
-    CrossEntropy,   // 交叉熵, 损失函数, 这种就是计算图优化, 我们拆开
-    SumAll,         // 求和函数
-    MultAll,        // 累乘函数
-    LnMultAll,      // ln版累乘函数
-    Function,       // 对所有的input进行相同的操作
-    MatrixFunction, // 使用不同的函数应用到不同的input上
+    CrossEntropy,    // 交叉熵, 损失函数, 这种就是计算图优化, 我们拆开
+    SumLine,         // 求和函数
+    MultLine,        // 累乘函数
+    LnMultLine,      // ln版累乘函数
+    Function,        // 对所有的input进行相同的操作
+    MatrixFunction,  // 使用不同的函数应用到不同的input上
+};
+
+// 一元函数表, 只用在Matrix<DualFunc>这种情况里面
+enum class FunctionType
+{
+    Sin,
+    Cos,
+    Log,
+    Exp,
+    Sqrt
 };

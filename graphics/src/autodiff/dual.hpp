@@ -3,6 +3,7 @@
 #include <cmath>
 #include <functional>
 #include <vector>
+#include "common.hpp"
 
 template <typename T>
 class Dual
@@ -32,9 +33,7 @@ public:
 
     Dual operator/(const Dual& other) const
     {
-        if (other.value == 0) {
-            return Dual(0, 0);
-        }
+        // 放弃除0判断, 让用户自己处理
         T v = value / other.value;
         T d = (derive * other.value - other.derive * value) / (other.value * other.value);
         return Dual(v, d);
@@ -56,63 +55,60 @@ public:
 
     friend Dual sin(const Dual& x)
     {
-        return Dual(std::sin(x.value), std::cos(x.value) * x.derive);
+        using std::sin;
+        using std::cos;
+        return Dual(sin(x.value), cos(x.value) * x.derive);
     }
 
     friend Dual cos(const Dual& x)
     {
-        return Dual(std::cos(x.value), -1 * std::sin(x.value) * x.derive);
+        using std::sin;
+        using std::cos;
+        return Dual(cos(x.value), -1 * sin(x.value) * x.derive);
     }
 
     friend Dual exp(const Dual& x)
     {
-        T e = std::exp(x.value);
+        using std::exp;
+        T e = exp(x.value);
         return Dual(e, e * x.derive);
     }
 
     friend Dual ln(const Dual& x)
     {
-        return Dual(std::log(x.value), x.derive / x.value);
+        using std::log;
+        return Dual(log(x.value), x.derive / x.value);
     }
 
     // x ^ y 也支持 x ^ n
     friend Dual pow(const Dual &x, const Dual &y)
     {
-        T v = std::pow(x.value, y.value);
-        T d = v * (y.derive * std::log(x.value) + x.derive * y.value / x.value);
+        using std::pow;
+        using std::log;
+        T v = pow(x.value, y.value);
+        T d = v * (y.derive * log(x.value) + x.derive * y.value / x.value);
         return Dual(v, d);
     }
 
     friend Dual sqrt(const Dual& x)
     {
-        T v = std::sqrt(x.value);
-        return Dual(v, x.derive / (2.0f * v));
-    }
-
-    friend Dual setDeriveOne(Dual& dual)
-    {
-        dual.derive = T(1);
-        return dual;
-    }
-
-    friend Dual setDeriveZero(Dual& dual)
-    {
-        dual.derive = T(0);
-        return dual;
+        using std::sqrt;
+        T v = sqrt(x.value);
+        return Dual(v, x.derive * ScalarTraits<T>::const_n(0.5) / v);
     }
 
     // 对一行 Dual 累加: Y = Σ xi
-    // forward 模式: dY = Σ dxi, 输出每个位置都等于总和及其全微分
+    // forward 模式: dY/dxi = 1
+    // 输出每个位置value都等于总和, 微分为1
     friend Dual sumLine(Dual* arr, int n)
     {
         Dual dual;
         for (int i = 0; i < n; i++) {
-            dual.value  += arr[i].value;
-            dual.derive += arr[i].derive;
+            dual.value  = dual.value + arr[i].value;
         }
         for (int i = 0; i < n; i++) {
             arr[i].value  = dual.value;
-            arr[i].derive = dual.derive;
+            arr[i].derive = ScalarTraits<T>::one();
         }
         return dual;
     }
@@ -124,7 +120,7 @@ public:
         Dual dual;
         dual.value = T(1);
         for (int i = 0; i < n; i++) {
-            dual.value *= arr[i].value;
+            dual.value = dual.value * arr[i].value;
         }
 
         T d = T(0);
@@ -136,6 +132,25 @@ public:
             arr[i].derive = d;
         }
         return dual;
+    }
+
+    friend Dual dualFunc(Dual &x, FuncType type)
+    {
+        switch (type)
+        {
+        case FuncType::SIN:
+            return sin(x);
+        case FuncType::COS:
+            return cos(x);
+        case FuncType::EXP:
+            return exp(x);
+        case FuncType::LN:
+            return ln(x);
+        case FuncType::SQRT:
+            return sqrt(x);
+        default:
+            return x;
+        }
     }
 };
 

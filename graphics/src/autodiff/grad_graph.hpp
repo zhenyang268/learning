@@ -7,9 +7,10 @@
 #include <utility>
 #include <cassert>
 #include <string>
-#include "dual.hpp"
+#include "autodiff/dual.hpp"
 #include "core/common.hpp"
 #include "core/matrix.hpp"
+#include "core/scalar.hpp"
 
 // 使用无作用域枚举会与 GradOp 的枚举值(Input/Data/Function)冲突, 改为作用域枚举
 enum class Type
@@ -44,40 +45,14 @@ template <typename T>
 class GradNode : public std::enable_shared_from_this<GradNode<T>>
 {
 public:
-    bool isDesent = false; // 是否是梯度下降, 只对常量矩阵求偏微分
     string name;    // "op+层数"用于debug
     GradOp op;      // 描述节点操作
     Type nodeType;  // 节点的类型
     // 不要单值, 直接存到matrix里面, 加减乘除都要对矩阵逐元素操作
-    Matrix<T> matrix; // matrix存储所有的值, 函数值, 偏导数值
-    Matrix<T> desent; // 这个是进行gradient desent时使用
-    /**
-     * 雅可比矩阵可以通过vjp方法简化, 比如Y = X * W, 雅可比矩阵就是W, 没必要再存一遍
-     * Y = sin(X), 雅可比矩阵是对角矩阵Aii = cos(xi) 也可以当场计算
-     * 
-     * 当场计算而不是额外存储, 当然我们只使用一点vjp方法的思想
-     */
+    Matrix<T> matrix; // matrix存储所有的值, 函数值, 对某个xi的偏导数值
+    Matrix<T> adjoint; // 反向时使用
     
-    /**
-        * 
-        * 再从损失函数自顶向下计算到当前节点的偏微分值
-        * matrix是链式法则计算用的关键矩阵, 保存节点操作对应的(node->value, node->derive)
-        * desent只有在记录自变量梯度时才有用, x_input节点里面, 也应该用desent存一份
-        * desent就是(v, 1)矩阵
-        * 参数 x_input都是输入的第一层入口, 参数只有一条路径, x可能多条
-    */
-    /**
-     * 从input正向计算节点的函数值
-     * 计算每个节点对input的偏微分值, 也就是雅可比矩阵
-     * Y = X * W
-     * 在计算对W的偏微分用于梯度下降时就相当于W是input, 固定x
-     * desent矩阵正向时用来保存雅可比矩阵, 反向时用来保存链式法则后的结果
-     * 损失函数只有一个y, 所以雅可比矩阵我们不严谨, y对W矩阵的偏微分并不是一列
-     * 但是其实正好矩阵形状就是我们想要的
-     */
-    
-    
-    Matrix<DualFunc<T>> matrixF; // 存储操作函数
+    Matrix<FunctionType> matrixF; // 存储操作函数, 分为1个和n*n个函数两种
     vector<std::shared_ptr<GradNode<T>>> inputs; // 依赖节点
 
 private:
@@ -120,26 +95,11 @@ public:
             node1 = inputs[0];
         }
         switch (op) {
-            case Input:
-                // 叶子节点: value 由外部设置, derive不能让外部设置, 固定为1
-                // (forward 模式逐输入求梯度, 这里不做覆盖)
-                // value预设, derive设为1
-                Apply(matrix, [](Dual<T>& d) { return setDeriveOne(d); });
+            // 输入节点value, derive以及要求的xi都由外部提前设置好
+            case Input: 
                 break;
-            case Output:
-                matrix = Matrix<T>(1, 1);
-                matrix[0][0] = node1->matrix[0][0];
-                // 损失函数y拓展成n维, 用于梯度计算
-                // 输出节点只保留一个值y
-                break;
+            
             case CrossEntropy:
-                break;
-            case Constant:
-                // 常量: matrix(v, 0), desent(v, 1)
-                // setDeriveZero/One 是 Dual 的友元函数, 只能靠 ADL 在调用点解析,
-                // 因此用 lambda 包装成 DualFunc 再传入 Apply
-                Apply(matrix, [](Dual<T>& d) { return setDeriveZero(d); });
-                Apply(desent, [](Dual<T>& d) { return setDeriveOne(d); });
                 break;
 
             case Add:
@@ -148,24 +108,30 @@ public:
             case Sub:
                 matrix = std::move(node1->matrix - node2->matrix);
                 break;
-            case Mult:
+            case CWiseMult:
             // 逐元素乘法
-            // z1 = x1 * y1
-            // dz1 = x1.d * y1.v + x1.v * y1.d
-                matrix = std::move(node1->matrix.multEach(node2->matrix));
+                matrix = std::move(node1->matrix.CWiseProduct(node2->matrix));
                 break;
+            
+            // 矩阵乘法也满足derive的计算规则
+            // 但是需要注意node1和node2的顺序, node1入参数行主导
+            // node2的derive都是0
             case MatrixMult:
-                matrix = std::move(node->matrix * node2->matrix);
+                matrix = std::move(node1->matrix * node2->matrix);
                 break;
             case Devide:
                 matrix = std::move(node1->matrix / node2->matrix);
                 break;
 
-            // case MatrixMult:
-            case Transpose: // 理论上不应该有转置
+            // transpose也是线性变换
+            case Transpose:
                 matrix = std::move(node1->Transpose());
                 break;
-            case Inverse:   // 理论上不应该有逆矩阵
+
+            // inverse要通过伴随内积配对来算
+            // <a_x, dx> = <a_y, dy>
+            // z = f(x) = g(y) (y和x是换元)
+            case Inverse:
                 matrix = std::move(node1->Inverse());
                 break;
 
@@ -202,20 +168,8 @@ public:
 
     }
 
-    /**
-     * 重要, 当前值和雅克比矩阵维数不匹配时, 直接拓展value位
-     * 比如 y = multall(X), y 1维拓展成n维
-     * ([y, dy/dx1], [y, dy/dx2], ..., [y, dy/dxn]) 变成 n维矩阵
-     */
-    // 反向模式(vjp)尚未实现; 当前梯度计算走 forward 模式(Forward 内的 Dual 传播)
     void Backward()
     {
-        /*
-        1. 函数矩阵, 一维当二维对角矩阵使用
-        2. 线性运算乘法MatrixMult, 对X是W, 对W是X, 加法对B是1
-        总结就是雅可比矩阵可以通过matrix里面的偏导以及inputs得到
-        */
-        
         std::shared_ptr<GradNode<T>> node1 = nullptr, node2 = nullptr;
         if (inputs.size() == 2) {
             node1 = inputs[0];
@@ -224,89 +178,59 @@ public:
         } else if (inputs.size() == 1) {
             node1 = inputs[0];
         }
-        // 每一个节点计算自己的梯度, 然后设置到变量
-        // 前向是算d(data)/d(input), 后向是算d(loss)/d(data)
-        // 因为loss单值, 所以雅可比矩阵一直只需要记录一列, 但是我们不做假设
-        // 一直当正常matrix计算, 当然以后可以做一味的专属优化, 就是不走矩阵乘法
+        /**
+         * adjoint只使用value, 不用derive, 加上traits分离太麻烦
+         */
         switch (op) {
-            // 数据节点不计算, 由上层帮自己设置
-            case Input:
-                break;
-            case Output:
-                // 最后一层不需要保存梯度, 就是1
-                break;
-            case Constant:
-                break;
             case CrossEntropy:
                 break;
-
-            // node1, node2两个n维input
-            // 所以要分别对node1和node2求雅可比矩阵
-            // 矩阵只要用T.value, T.derive无关变量
             case Add:
-                // node1 + node2
-                // d(node1 + node2)/dnode1 = 1, d(node1 + node2)/dnode2 = 1
-                node1->desent = desent;
-                node2->desent = desent;
+                node1->adjoint = Matrix(node1->matrix.Rows(),
+                                        node1->matrix.Cols(),
+                                        ScalarTraits<T>::one());
+                node2->adjoint = Matrix(node2->matrix.Rows(),
+                                        node2->matrix.Cols(),
+                                        ScalarTraits<T>::one());
+                node1->adjoint = node1->adjoint.CWiseProduct(adjoint);
+                node2->adjoint = node2->adjoint.CWiseProduct(adjoint);
                 break;
             case Sub:
-                node1->desent = desent;
-                node2->desent = Matrix(desent.Rows(), desent.Cols()) - desent;
+                node1->adjoint = Matrix(node1->matrix.Rows(), 
+                                        node1->matrix.Cols(),
+                                        ScalarTraits<T>::one());
+                node2->adjoint = Matrix(node2->matrix.Rows(),
+                                        node2->matrix.Cols(),
+                                        ScalarTraits<T>::zero() - ScalarTraits<T>::one());
+                node1->adjoint = node1->adjoint.CWiseProduct(adjoint);
+                node2->adjoint = node2->adjoint.CWiseProduct(adjoint);
                 break;
             case Mult:
                 // node1 * node2 (n1.v1 * n2.v1, n1.v2 * n2.v2, ...)
                 // d(node1 * node2)/dnode1 = node2, d(node1 * node2)/dnode2 = node1
-                // 雅可比矩阵是对角矩阵(n2.v1, n2.v2, n2.v3, ...)
-                // 很明显其他位置都为0
-                Matrix<T> jacobian1(node2->matrix.Rows(),
-                                    node2->matrix.Cols());
-                Matrix<T> jacobian2(node1->matrix.Rows(),
-                                    node1->matrix.Cols());
-
-                for (int i = 0; i < node1->matrix.Rows(); i++) {
-                    jacobian1[i][i] = node2->matrix[0][i];
-                    jacobian2[i][i] = node1->matrix[0][i];
-                }
-                node1->desent = jacobian1 * desent;
-                node2->desent = jacobian2 * desent;
-                
+                node1->adjoint = node2->matrix.CWiseProduct(adjoint);
+                node2->adjoint = node1->matrix.CWiseProduct(adjoint);
                 break;
             case MatrixMult:
-                if (node1->nodeType == Type::Parameter) {
-                    auto tmp = node1;
-                    node1 = node2;
-                    node2 = tmp;
-                }
-                // X * W, 对X求偏微分是W, 对W求偏微分是X拓展n列
-                node1->desent = node2->matrix * desent;
-                node2->desent = Matrix<T>(node1->matrix.Rows(),
-                                         node1->matrix.Cols());
-                for (int i = 0; i < node1->matrix.Rows(); i++) {
-                    for (int j = 0; j < node1->matrix.Cols(); j++) {
-                        node2->desent[i][j] = node1->matrix[0][i] * desent[j][0];
-                    }
-                }
+                // dY = dX * W + x * dW
+                // <a_x, dx> = <a_y, dy> = tr(dy^T * a_y), dW = 0
+                // <J^*  * a_y, dx> = <a_y, dx * J>
+                // 推出a_X = a_Y * W^T
+                // 同理dX = 0
+                // a_W = X^T * a_y
+                node1->adjoint = adjoint * node2->matrix.transpose();
+                node2->adjoint = node1->matrix.transpose() * adjoint;
                 break;
             case Devide:
-                // node1 [m1, m2] / node2 [n1, n2]
-                // d(node1/node2)/dnode1 = 1/n2, d(node1/node2)/dnode2 = -m1/n1^2
-                Matrix<T> jacobian1(node2->matrix.Rows(),
-                                    node2->matrix.Cols());
-                Matrix<T> jacobian2(node1->matrix.Rows(),
-                                    node1->matrix.Cols());
-                for (int i = 0; i < node1->matrix.Rows(); i++) {
-                    jacobian1[i][i] = 1.0f / node2->matrix[0][i];
-                    jacobian2[i][i] = -node1->matrix[0][i] / (node2->matrix[0][i] * node2->matrix[0][i]);
-                }
-                node1->desent = jacobian1 * desent;
-                node2->desent = jacobian2 * desent;
+                node1->adjoint = adjoint * node2->matrix.transpose();
+                node2->adjoint = Matrix(node2->matrix.Rows(),
+                                        node2->matrix.Cols(),
+                                        ScalarTraits<T>::zero() - ScalarTraits<T>::one());
+                node2->adjoint = node2->adjoint.CWiseProduct(node1->matrix) / node2->matrix / node2->matrix;
                 break;
-
-            // case MatrixMult:
-            case Transpose: // 理论上不应该有转置
+            case Transpose:
                 matrix = std::move(node1->Transpose());
                 break;
-            case Inverse:   // 理论上不应该有逆矩阵
+            case Inverse:
                 matrix = std::move(node1->Inverse());
                 break;
 
@@ -317,8 +241,7 @@ public:
             case Tanh:
                 break;
             case Softmax:
-                break;
-            
+                break;            
 
             case SumAll:
                 matrix = std::move(SumLine(node1->matrix));
@@ -342,24 +265,6 @@ public:
         }
     }
 };
-/* 使用行向量模式, 最优化内存排列和性能
-
-1. x 8维 拆分成3维和5维, 也可以拓展更多维数
-    | 1 0 0 |                               | x1  x1  x1 |
-x   | 0 1 0 |  MatrixMultiply    求微分易得   | x2  x2  x2 |
-    | 0 0 1 |                               | x3  x3  x3 |
-这里我们将矩阵视为线性参数矩阵, yT = WT * xT
-
-2. MatrixFunction 只保留一种, 只要是变量都应该是1维
-
-行(x x^2 x^3) 应用在 3维 (x1, x2, x3) 上得到 1x3 新的 (x1, x2^2, x3^3)
-
-如果需要更多的子函数, 就可以先拓展 (x1, x2, x3)
-    | 1 0 0 1 0 0|
-    | 0 1 0 0 1 1|   得到 (x1, x2, x3, x1, x2, x2)
-    | 0 0 1 0 0 0|  
-*/
-
 
 /**
  * 计算拓扑顺序

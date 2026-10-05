@@ -79,40 +79,19 @@ private:
     int cols;
     
     std::vector<T> data;
-    std::vector<T*> matrix; // 行标识
 
-    int _errno;
+    // 行标识去掉, 使用局部变量构造, 这样不用管这个指针的所有权问题
+    // std::vector<T*> matrix;
 
 public:
     Matrix(): rows(0), cols(0), data(0), matrix(0) {}
 
-    // 初始化对角矩阵
-    Matrix(int m, T initVal) : rows(m), cols(m), data(m * m), matrix(m)
+    Matrix(int m, int n, T initVal): rows(m), cols(n), data(m * n, initVal)
     {
-        for (int i = 0; i < rows; i++) {
-            matrix[i] = &data[cols * i];
-        }
-        for (int i = 0; i < rows; i++) {
-            matrix[i][i] = initVal;
-        }
     }
 
-    Matrix(int m, int n): rows(m), cols(n), data(m * n), matrix(m)
+    Matrix(int m, int n) : rows(m), cols(n), data(m * n)
     {
-        // Quote: 二维数组[][]必须通过赋值方式额外存储
-        for (int i = 0; i < rows; i++) {
-            matrix[i] = &data[cols * i];
-        }
-    }
-
-    Matrix(int m, int n, std::vector<T> values): rows(m), cols(n), data(values), matrix(m)
-    {
-        // Quote: 二维数组[][]必须通过赋值方式额外存储
-        
-        for (int i = 0; i < rows; i++) {
-            matrix[i] = &data[cols * i]; 
-        }
-        // std::copy(values.first, values.first + m * n, data.first);
     }
 
     // 从initializer_list构造（方便初始化）
@@ -121,7 +100,7 @@ public:
         cols = (list.begin())->size();
         
         data = std::vector<T>(rows * cols);
-        matrix = std::vector<T*>(rows);
+        std::vector<T*> matrix(rows);
         
         int i = 0;
         for (const auto& row : list) {
@@ -137,11 +116,8 @@ public:
     // ---------- Rule of Three：深拷贝 ----------
     // 注意: matrix 是 data 的行指针数组, 拷贝时必须重建指针, 否则会指向原对象 data
     Matrix(const Matrix& other) : rows(other.rows), cols(other.cols),
-        data(other.data), matrix(rows)
+        data(other.data)
     {
-        for (int i = 0; i < rows; i++) {
-            matrix[i] = &data[cols * i];
-        }
     }
 
     Matrix& operator=(const Matrix& other)
@@ -151,17 +127,13 @@ public:
         rows = other.rows;
         cols = other.cols;
         data = other.data;
-        matrix.resize(rows);
-        for (int i = 0; i < rows; i++) {
-            matrix[i] = &data[cols * i];
-        }
         return *this;
     }
 
     // ---------- 移动构造函数获取所有权 ---------- // 防止重复delete
     // 注意: noexcept 必须位于 mem-initializer 列表之前
     Matrix(Matrix&& other) noexcept : rows(other.rows), cols(other.cols),
-        matrix(std::move(other.matrix)), data(std::move(other.data))
+        data(std::move(other.data))
     {
         other.rows = 0;
         other.cols = 0;
@@ -174,7 +146,6 @@ public:
 
         rows = other.rows;
         cols = other.cols;
-        matrix = std::move(other.matrix);
         data = std::move(other.data);
         
         other.rows = 0;
@@ -182,9 +153,21 @@ public:
         return *this;
     }
 
-    // 外部访问接口A[][]
-    T* operator[](int row) { return matrix[row]; }
-    const T* operator[](int row) const { return matrix[row]; }
+    // 外部访问接口A[][], 语法糖
+    T* operator[](int row) { return &data[row * cols]; }
+    const T* operator[](int row) const { return &data[row * cols]; }
+
+    // 二维访问: A(i, j)
+    T&       operator()(int i, int j)       { return data[i * cols_ + j]; }
+    const T& operator()(int i, int j) const { return data[i * cols_ + j]; }
+
+    // 安全版: at(i, j) —— 检查后直接算, 不经过任何语法糖
+    // 不靠谱的调用只能通过这个接口
+    T& at(int i, int j) {
+        if (i < 0 || i >= rows_ || j < 0 || j >= cols_)
+            throw std::out_of_range("Matrix::at");
+        return data[i * cols_ + j];        // ← 内部直算
+    }
 
     ~Matrix();
     
@@ -197,8 +180,6 @@ private:
     mutable std::list<std::unique_ptr<Matrix>> decomposition; // lu和矩阵乘法使用
 
 public:
-    // 如果矩阵stable初始化后不变, 就可以使用缓存
-    void EnableCache() { couldCached = true; }
     int Rows() { return rows; }
     int Cols() { return cols; }
     int Size() { return rows * cols; }
@@ -262,8 +243,8 @@ public:
         return multiply_common(*this, other);
     }
     
-    // 逐元素乘法
-    Matrix MultEach(const Matrix& other)
+    // 逐元素乘法, Hadamard product
+    Matrix CWiseProduct(const Matrix& other)
     {
         if (this->rows != other.rows || this->cols != other.cols) {
             throw std::invalid_argument("Matrix dimension mismatch!");
@@ -276,20 +257,6 @@ public:
         return result;
     }
 
-    // 计算雅可比矩阵, 但是用n维存储对角线版
-    Matrix MultDiagnal(const Matrix& other)
-    {
-        // 特殊运算规则, 函数雅可比矩阵运算必须n*n维
-        if (this->rows != other.rows || this->cols != other.cols) {
-            throw std::invalid_argument("Matrix dimension mismatch!");
-        }
-
-        Matrix result(this->rows, this->cols);
-        for (int i = 0; i < this->rows; i++) {
-            result[i][i] = this->matrix[0][i] * other.matrix[i][i];
-        }
-        return result;
-    }
 
     Matrix Transpose() const;
     Matrix Inverse() const;
@@ -346,7 +313,7 @@ Matrix<T> Matrix<T>::multiply_common(const Matrix &A, const Matrix &B)
 
 // 对矩阵所有元素应用同一函数
 template <typename T>
-Matrix<T> Apply(Matrix<T> &A, DualFunc<T> f)
+Matrix<T> Apply(Matrix<T> &A, FunctionType f)
 {
     Matrix<T> B(A.rows, A.cols);
     for (int i = 0; i < A.rows * A.cols; i++) {
@@ -364,13 +331,14 @@ Matrix<T> Apply(Matrix<T> &A, Matrix<DualFunc<T>> &matrixf)
         return Apply(A, matrixf[0][0]); // 单函数退化为统一应用
     }
 
-    if (A.rows != 1 || matrixf.rows != 1 || A.cols != matrixf.cols) {
+    // 应该只有一维, 但是后续染色节点打包可能涉及多行
+    if (A.cols != matrixf.cols) {
         throw std::invalid_argument("Matrix apply dimension mismatch!");
     }
 
     Matrix<T> B(A.rows, A.cols);
     for (int i = 0; i < A.rows * A.cols; i++) {
-        B.data[i] = matrixf.data[i](A.data[i]);
+        B.data[i] = dualFunc(A.data[i], matrixf.data[i]);
     }
 
     return B;
