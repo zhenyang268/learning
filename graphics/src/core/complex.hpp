@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include "core/scalar_traits.hpp"
 
 template <typename T>
 class Complex

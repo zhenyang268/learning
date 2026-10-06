@@ -11,10 +11,10 @@
 #include <concepts>
 #include <type_traits>
 #include <cmath>
-#include "complex.hpp"
-#include "dual.hpp"
+#include "core/complex.hpp"
+#include "autodiff/dual.hpp"
+#include "core/scalar_traits.hpp"
 
-template <typename T> struct ScalarTraits;
 
 template <typename T>
 concept Scalar = std::semiregular<T> && requires (T a, T b) {
@@ -80,7 +80,8 @@ struct ScalarTraits<Dual<T>> {
     static Dual<T> zero() { return Dual<T>(ScalarTraits<T>::zero(), ScalarTraits<T>::zero()); }
     static Dual<T> one() { return Dual<T>(ScalarTraits<T>::one(), ScalarTraits<T>::zero()); }
 
-    static Dual<T> conj(const Dual<T>& x) { return Dual<T>(ScalarTraits<T>::conj(x.real), -x.dual); }
+    static Dual<T> conj(const Dual<T>& x) { return Dual<T>(ScalarTraits<T>::conj(x.real),
+                                                        ScalarTraits<T>::conj(x.dual)); }
     static real_t abs2(const Dual<T>& x) { return ScalarTraits<T>::abs2(x.real); }
 
     static Dual<T> const_n(const T& x) { return Dual<T>(x, ScalarTraits<T>::zero()); }

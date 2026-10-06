@@ -204,7 +204,7 @@ public:
                                         ScalarTraits<T>::one());
                 adjoint2 = Matrix(node2->matrix.Rows(),
                                         node2->matrix.Cols(),
-                                        ScalarTraits<T>::zero() - ScalarTraits<T>::one());
+                                        -ScalarTraits<T>::one());
                 node1->adjoint += adjoint1.CWiseProduct(adjoint);
                 node2->adjoint += adjoint2.CWiseProduct(adjoint);
                 break;
@@ -229,7 +229,7 @@ public:
                 node1->adjoint += adjoint * node2->matrix.transpose();
                 adjoint2 = Matrix(node2->matrix.Rows(),
                                         node2->matrix.Cols(),
-                                        ScalarTraits<T>::zero() - ScalarTraits<T>::one());
+                                        -ScalarTraits<T>::one());
                 node2->adjoint += adjoint2.CWiseProduct(node1->matrix) / node2->matrix / node2->matrix;
                 break;
             case Transpose:
@@ -239,7 +239,7 @@ public:
             // a_x = - Y^T * a_y * Y^T
             case Inverse:
                 adjoint1 = matrix.Transpose() * adjoint * matrix.Transpose(); 
-                adjoint1.CWisePoint(ScalarTraits<T>::zero() - ScalarTraits<T>::one());
+                adjoint1.CWisePoint(-ScalarTraits<T>::one());
                 node1->adjoint += adjoint1;
                 break;
 

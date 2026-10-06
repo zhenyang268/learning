@@ -4,7 +4,8 @@
 #include <functional>
 #include <vector>
 #include <map>
-#include "common.hpp"
+#include "core/common.hpp"
+#include "core/scalar_traits.hpp"
 
 template <typename T>
 class Dual
@@ -24,6 +25,11 @@ public:
     Dual operator-(const Dual& other) const
     {
         return Dual(value - other.value, derive - other.derive);
+    }
+
+    Dual operator-() const
+    {
+        return Dual(-value, -derive);
     }
 
     Dual operator*(const Dual& other) const
@@ -51,7 +57,7 @@ public:
     // 常数用于函数矩阵拓展
     friend Dual constant(const Dual& x)
     {
-        return Dual(x.value, 0);
+        return Dual(x.value, ScalarTraits<T>::zero());
     }
 
     friend Dual sin(const Dual& x)
@@ -65,7 +71,7 @@ public:
     {
         using std::sin;
         using std::cos;
-        return Dual(cos(x.value), -1 * sin(x.value) * x.derive);
+        return Dual(cos(x.value), (-ScalarTraits<T>::one()) * sin(x.value) * x.derive);
     }
 
     friend Dual exp(const Dual& x)
@@ -98,7 +104,7 @@ public:
         return Dual(v, x.derive * ScalarTraits<T>::const_n(0.5) / v);
     }
 
-    friend Dual sumLine(vector<Dual> &arr, int n)
+    friend Dual sumLine(const vector<Dual> &arr, int n)
     {
         Dual dual;
         for (int i = 0; i < n; i++) {
@@ -110,15 +116,15 @@ public:
 
     // 对一行 Dual 累乘: Y = Π xi
     // forward 模式: dY = Σ (total/xi)·dxi, 输出每个位置都等于总积及其全微分
-    friend Dual multLine(vector<Dual> &arr, int n)
+    friend Dual multLine(const vector<Dual> &arr, int n)
     {
         Dual dual;
-        dual.value = T(1);
+        dual.value = ScalarTraits<T>::one();
         map<int, int> index; // 记录为0的索引
 
         for (int i = 0; i < n; i++) {
             dual.value = dual.value * arr[i].value;
-            if (arr[i].value == T(0)) {
+            if (arr[i].value == ScalarTraits<T>::zero()) {
                 index.insert(make_pair(i, 1));
             }
         }
@@ -129,10 +135,12 @@ public:
             d += (dual.value / arr[i].value) * arr[i].derive;
         }
 
+        dual.derive = d;
+
         return dual;
     }
 
-    friend Dual dualFunc(Dual &x, FuncType type)
+    friend Dual dualFunc(const Dual &x, FuncType type)
     {
         switch (type)
         {
@@ -151,8 +159,3 @@ public:
         }
     }
 };
-
-template <typename T>
-using DualFunc = std::function<T(T&)>;
-
-// DualFunc<Dual<float>>
