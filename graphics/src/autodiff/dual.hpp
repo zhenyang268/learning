@@ -3,6 +3,7 @@
 #include <cmath>
 #include <functional>
 #include <vector>
+#include <map>
 #include "common.hpp"
 
 template <typename T>
@@ -97,40 +98,37 @@ public:
         return Dual(v, x.derive * ScalarTraits<T>::const_n(0.5) / v);
     }
 
-    // 对一行 Dual 累加: Y = Σ xi
-    // forward 模式: dY/dxi = 1
-    // 输出每个位置value都等于总和, 微分为1
-    friend Dual sumLine(Dual* arr, int n)
+    friend Dual sumLine(vector<Dual> &arr, int n)
     {
         Dual dual;
         for (int i = 0; i < n; i++) {
             dual.value  = dual.value + arr[i].value;
-        }
-        for (int i = 0; i < n; i++) {
-            arr[i].value  = dual.value;
-            arr[i].derive = ScalarTraits<T>::one();
+            dual.derive = dual.derive + arr[i].derive;
         }
         return dual;
     }
 
     // 对一行 Dual 累乘: Y = Π xi
     // forward 模式: dY = Σ (total/xi)·dxi, 输出每个位置都等于总积及其全微分
-    friend Dual multLine(Dual* arr, int n)
+    friend Dual multLine(vector<Dual> &arr, int n)
     {
         Dual dual;
         dual.value = T(1);
+        map<int, int> index; // 记录为0的索引
+
         for (int i = 0; i < n; i++) {
             dual.value = dual.value * arr[i].value;
+            if (arr[i].value == T(0)) {
+                index.insert(make_pair(i, 1));
+            }
         }
 
         T d = T(0);
         for (int i = 0; i < n; i++) {
+            if (index.find(i) != index.end()) continue;
             d += (dual.value / arr[i].value) * arr[i].derive;
         }
-        for (int i = 0; i < n; i++) {
-            arr[i].value  = dual.value;
-            arr[i].derive = d;
-        }
+
         return dual;
     }
 

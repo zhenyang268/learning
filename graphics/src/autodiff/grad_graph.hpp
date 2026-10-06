@@ -11,6 +11,7 @@
 #include "core/common.hpp"
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
+#include "autodiff/jacobian.hpp"
 
 // 使用无作用域枚举会与 GradOp 的枚举值(Input/Data/Function)冲突, 改为作用域枚举
 enum class Type
@@ -146,10 +147,12 @@ public:
             
 
             case SumAll:
-                matrix = std::move(SumLine(node1->matrix));
+                matrix = Matrix(1, 1);
+                matrix[0][0] = SumLine(node1->matrix);
                 break;
             case MultAll:
-                matrix = std::move(MultLine(node1->matrix));
+                matrix = Matrix(1, 1);
+                matrix[0][0] = MultLine(node1->matrix);
                 break;
             case LnMultAll:
                 break;
@@ -171,6 +174,7 @@ public:
     void Backward()
     {
         std::shared_ptr<GradNode<T>> node1 = nullptr, node2 = nullptr;
+        Matrix<T> adjoint1, adjoint2;
         if (inputs.size() == 2) {
             node1 = inputs[0];
             node2 = inputs[1];
@@ -185,30 +189,30 @@ public:
             case CrossEntropy:
                 break;
             case Add:
-                node1->adjoint = Matrix(node1->matrix.Rows(),
+                adjoint1 = Matrix(node1->matrix.Rows(),
                                         node1->matrix.Cols(),
                                         ScalarTraits<T>::one());
-                node2->adjoint = Matrix(node2->matrix.Rows(),
+                adjoint2 = Matrix(node2->matrix.Rows(),
                                         node2->matrix.Cols(),
                                         ScalarTraits<T>::one());
-                node1->adjoint = node1->adjoint.CWiseProduct(adjoint);
-                node2->adjoint = node2->adjoint.CWiseProduct(adjoint);
+                node1->adjoint += adjoint1.CWiseProduct(adjoint);
+                node2->adjoint += adjoint2.CWiseProduct(adjoint);
                 break;
             case Sub:
-                node1->adjoint = Matrix(node1->matrix.Rows(), 
+                adjoint1 = Matrix(node1->matrix.Rows(), 
                                         node1->matrix.Cols(),
                                         ScalarTraits<T>::one());
-                node2->adjoint = Matrix(node2->matrix.Rows(),
+                adjoint2 = Matrix(node2->matrix.Rows(),
                                         node2->matrix.Cols(),
                                         ScalarTraits<T>::zero() - ScalarTraits<T>::one());
-                node1->adjoint = node1->adjoint.CWiseProduct(adjoint);
-                node2->adjoint = node2->adjoint.CWiseProduct(adjoint);
+                node1->adjoint += adjoint1.CWiseProduct(adjoint);
+                node2->adjoint += adjoint2.CWiseProduct(adjoint);
                 break;
-            case Mult:
-                // node1 * node2 (n1.v1 * n2.v1, n1.v2 * n2.v2, ...)
-                // d(node1 * node2)/dnode1 = node2, d(node1 * node2)/dnode2 = node1
-                node1->adjoint = node2->matrix.CWiseProduct(adjoint);
-                node2->adjoint = node1->matrix.CWiseProduct(adjoint);
+            case CWiseMult:
+                // y = A cwiseproduct X
+                // 逐元素乘法, a_x = a_y cwiseproduct A
+                node1->adjoint += node2->matrix.CWiseProduct(adjoint);
+                node2->adjoint += node1->matrix.CWiseProduct(adjoint);
                 break;
             case MatrixMult:
                 // dY = dX * W + x * dW
@@ -217,21 +221,26 @@ public:
                 // 推出a_X = a_Y * W^T
                 // 同理dX = 0
                 // a_W = X^T * a_y
-                node1->adjoint = adjoint * node2->matrix.transpose();
-                node2->adjoint = node1->matrix.transpose() * adjoint;
+                // 这里如果是X * X, 恰好也成立
+                node1->adjoint += adjoint * node2->matrix.transpose();
+                node2->adjoint += node1->matrix.transpose() * adjoint;
                 break;
             case Devide:
-                node1->adjoint = adjoint * node2->matrix.transpose();
-                node2->adjoint = Matrix(node2->matrix.Rows(),
+                node1->adjoint += adjoint * node2->matrix.transpose();
+                adjoint2 = Matrix(node2->matrix.Rows(),
                                         node2->matrix.Cols(),
                                         ScalarTraits<T>::zero() - ScalarTraits<T>::one());
-                node2->adjoint = node2->adjoint.CWiseProduct(node1->matrix) / node2->matrix / node2->matrix;
+                node2->adjoint += adjoint2.CWiseProduct(node1->matrix) / node2->matrix / node2->matrix;
                 break;
             case Transpose:
-                matrix = std::move(node1->Transpose());
+                node1->adjoint = std::move(node1->Transpose());
                 break;
+            
+            // a_x = - Y^T * a_y * Y^T
             case Inverse:
-                matrix = std::move(node1->Inverse());
+                adjoint1 = matrix.Transpose() * adjoint * matrix.Transpose(); 
+                adjoint1.CWisePoint(ScalarTraits<T>::zero() - ScalarTraits<T>::one());
+                node1->adjoint += adjoint1;
                 break;
 
             case Sigmoid:
@@ -243,24 +252,27 @@ public:
             case Softmax:
                 break;            
 
+            // a_x = J * a_y, J是全1矩阵
             case SumAll:
-                matrix = std::move(SumLine(node1->matrix));
+                adjoint1 = Matrix(node1->matrix.Rows(),
+                                        node1->matrix.Cols(),
+                                        ScalarTraits<T>::one());
+                node1->adjoint += adjoint1.CWiseProduct(adjoint[0][0]);
                 break;
+            
+            // a_x = J * a_y, Jij是除xij的累乘
             case MultAll:
-                matrix = std::move(MultLine(node1->matrix));
+                adjoint1 = Derive(MultAll(node1->matrix));
+                node1->adjoint += adjoint1.CWiseProduct(adjoint);
                 break;
             case LnMultAll:
                 break;
             
-            /**
-             * n维输入, n维输出, 但是雅可比矩阵是n*n
-             * 所以这里每个函数的微分都在矩阵的对角线上, 可以用原n维矩阵存储
-             */
             case Function:
-                matrix = std::move(Apply(node1->matrix, matrixF[0][0]));
+                node1->adjoint += adjoint * Derive(Apply(node1->matrix, matrixF[0][0]));
                 break;
             case MatrixFunction:
-                matrix = std::move(Apply(node1->matrix, matrixF));
+                node1->adjoint += adjoint * Derive(Apply(node1->matrix, matrixF));
                 break;
         }
     }

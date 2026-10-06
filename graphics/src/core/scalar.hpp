@@ -33,6 +33,7 @@ concept Scalar = std::semiregular<T> && requires (T a, T b) {
 template <>
 struct ScalarTraits<float> {
     using real_t = float;
+    static constexpr bool commutative = true;
 
     static real_t zero() { return 0.0f; }
     static real_t one() { return 1.0f; }
@@ -46,6 +47,7 @@ struct ScalarTraits<float> {
 template <>
 struct ScalarTraits<double> {
     using real_t = double;
+    static constexpr bool commutative = true;
 
     static real_t zero() { return 0.0; }
     static real_t one() { return 1.0; }
@@ -59,6 +61,7 @@ struct ScalarTraits<double> {
 template <typename T> requires Scalar<T>
 struct ScalarTraits<Complex<T>> {
     using real_t = typename ScalarTraits<T>::real_t;
+    static constexpr bool commutative = ScalarTraits<T>::commutative;
 
     static Complex<T> zero() { return Complex<T>(ScalarTraits<T>::zero(), ScalarTraits<T>::zero()); }
     static Complex<T> one() { return Complex<T>(ScalarTraits<T>::one(), ScalarTraits<T>::zero()); }
@@ -72,6 +75,7 @@ struct ScalarTraits<Complex<T>> {
 template <typename T> requires Scalar<T>
 struct ScalarTraits<Dual<T>> {
     using real_t = typename ScalarTraits<T>::real_t;
+    static constexpr bool commutative = ScalarTraits<T>::commutative;
 
     static Dual<T> zero() { return Dual<T>(ScalarTraits<T>::zero(), ScalarTraits<T>::zero()); }
     static Dual<T> one() { return Dual<T>(ScalarTraits<T>::one(), ScalarTraits<T>::zero()); }
@@ -80,4 +84,11 @@ struct ScalarTraits<Dual<T>> {
     static real_t abs2(const Dual<T>& x) { return ScalarTraits<T>::abs2(x.real); }
 
     static Dual<T> const_n(const T& x) { return Dual<T>(x, ScalarTraits<T>::zero()); }
+};
+
+// 细化 concept：在 requires 里查这个 flag。
+// 没登记的类型 → 成员不存在 → 软失败判 false（报错干净，不是两百行天书）
+template <typename T>
+concept CommutativeScalar = Scalar<T> && requires {
+    requires ScalarTraits<T>::commutative;      // 必须是编译期 true
 };
