@@ -47,12 +47,15 @@ enum class MatrixKind
 };
 
 // 单元操作直接定义在Dual类的友元函数中, Dual.sin
-// 多元函数操作定义在Matrix类的友元函数中, Matrix<T>.SumAll
+// 矩阵级约简/逐元素应用在 autodiff/jacobian.hpp (SumAll/MultAll/Apply)
 enum class GradOp
 {
     Input,          // 输入节点
+    Constant,       // 常数/常量矩阵节点
+    Output,         // 输出透传节点
     Add,
     Sub,
+    Mult,           // 逐元素乘 (标量/同形)
     CWiseMult,      // 逐元素乘法
     CWisePow,       // 逐元素幂运算
     Divide,
@@ -64,14 +67,14 @@ enum class GradOp
     Tanh,
     Softmax,
     CrossEntropy,    // 交叉熵, 损失函数, 这种就是计算图优化, 我们拆开
-    SumLine,         // 求和函数
-    MultLine,        // 累乘函数
-    LnMultLine,      // ln版累乘函数
+    SumAll,          // 全元素求和
+    MultAll,         // 全元素累乘
+    LnMultAll,       // ln版累乘函数
     Function,        // 对所有的input进行相同的操作
     MatrixFunction,  // 使用不同的函数应用到不同的input上
 };
 
-// 一元函数表, 只用在Matrix<DualFunc>这种情况里面
+// 一元函数表, 只用在 Matrix<FunctionType>(函数节点) 这种情况里面
 enum class FunctionType
 {
     Sin,

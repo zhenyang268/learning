@@ -6,7 +6,7 @@
 #include "core/scalar.hpp"
 
 // #include "linalg/solve.hpp"  // TODO: LU 落地后打开 (matrix.md §3.1:
-//   LUResult{L,U,piv} / LU(A) / Solve(A,b) 解 X·A = b, 行向量约定 D19)
+//   LUResult{L,U,piv} / LU(A) / Solve(A,b) 解 A·x = b, 教科书列向量约定, D19 修订版)
 
 // ---- 结构探测: 每个判断是一次数学练习 (matrix.md §3.2) ----
 // D7: 比较用 abs2, 共轭用 conj, 算法层零分支; D12: 容差 tol 由调用方给
@@ -32,9 +32,9 @@ MatrixKind Classify(const Matrix<T>& A, typename ScalarTraits<T>::real_t tol);
 // ---- 各分支专用求逆 (实现体 TODO, 用户填写) ----
 template <CommutativeScalar T>
 Matrix<T> lu_inverse(const Matrix<T>& A);
-// 阶段 1 主路径: LU 部分选主元 + 逐"行"回代 (D19 镜像!)
-// A·A^{-1} = I => A^{-1} 第 i 行 r_i 满足 r_i·A = e_i => r_i = Solve(A, e_i)
-// 教科书"逐列回代"是列向量语境, 本库行向量语境整体转置 = 逐行回代
+// 阶段 1 主路径: LU 部分选主元 + 逐列回代 (教科书口径, D19 修订)
+// A·A^{-1} = I => A^{-1} 第 i 列 c_i 满足 A·c_i = e_i => c_i = Solve(A, e_i)
+// 与教科书同形, 直接照抄, 零转置心算
 // 奇异判定: 选主元 |pivot|^2 <= tol 则抛 (D12)
 
 template <CommutativeScalar T>

@@ -7,6 +7,7 @@
 #include <utility>
 #include <cassert>
 #include <string>
+#include <stdexcept>
 #include "autodiff/dual.hpp"
 #include "core/common.hpp"
 #include "core/matrix.hpp"
@@ -59,22 +60,21 @@ public:
 private:
     void op2type()
     {
-        if (op >= GradOp::Input && op < GradOp::Constant) {
+        if (op == GradOp::Input || op == GradOp::Output) {
             nodeType = Type::Data;
         } else if (op == GradOp::Constant) {
             nodeType = Type::Parameter;
         } else {
             nodeType = Type::Function;
         }
-        //     nodeType = Type::Operation; // 本质和函数没区别, 但是这里固定住不修改
     }
 
 public:
     GradNode(GradOp op, Matrix<T> matrix):
             op(op), matrix(std::move(matrix)) { op2type(); }
 
-    GradNode(GradOp op, Matrix<DualFunc<T>> matrixF):
-            op(op), matrixF(matrixF) { op2type(); }
+    GradNode(GradOp op, Matrix<FunctionType> matrixF):
+            op(op), matrixF(std::move(matrixF)) { op2type(); }
 
     std::shared_ptr<GradNode<T>> GetSelf()
     {
@@ -111,7 +111,7 @@ public:
                 break;
             case CWiseMult:
             // 逐元素乘法
-                matrix = std::move(node1->matrix.CWiseProduct(node2->matrix));
+                matrix = std::move(node1->matrix.cwiseProduct(node2->matrix));
                 break;
             
             // 矩阵乘法也满足derive的计算规则
@@ -120,21 +120,21 @@ public:
             case MatrixMult:
                 matrix = std::move(node1->matrix * node2->matrix);
                 break;
-            case Devide:
-                matrix = std::move(node1->matrix / node2->matrix);
+            case Divide:
+                matrix = std::move(node1->matrix.cwiseDivision(node2->matrix));
                 break;
 
             // transpose也是线性变换
             case Transpose:
-                matrix = std::move(node1->Transpose());
+                matrix = std::move(node1->matrix.Transpose());
                 break;
 
             // inverse要通过伴随内积配对来算
             // <a_x, dx> = <a_y, dy>
             // z = f(x) = g(y) (y和x是换元)
             case Inverse:
-                matrix = std::move(node1->Inverse());
-                break;
+                // TODO: 阶段 1 接 linalg::Inverse
+                throw std::logic_error("Inverse: 待 linalg::Inverse 落地 (阶段 1)");
 
             case Sigmoid:
                 break;
@@ -148,11 +148,11 @@ public:
 
             case SumAll:
                 matrix = Matrix(1, 1);
-                matrix[0][0] = SumLine(node1->matrix);
+                matrix[0][0] = SumAll(node1->matrix);
                 break;
             case MultAll:
                 matrix = Matrix(1, 1);
-                matrix[0][0] = MultLine(node1->matrix);
+                matrix[0][0] = MultAll(node1->matrix);
                 break;
             case LnMultAll:
                 break;
@@ -189,30 +189,27 @@ public:
             case CrossEntropy:
                 break;
             case Add:
-                adjoint1 = Matrix(node1->matrix.Rows(),
-                                        node1->matrix.Cols(),
-                                        ScalarTraits<T>::one());
-                adjoint2 = Matrix(node2->matrix.Rows(),
-                                        node2->matrix.Cols(),
-                                        ScalarTraits<T>::one());
-                node1->adjoint += adjoint1.CWiseProduct(adjoint);
-                node2->adjoint += adjoint2.CWiseProduct(adjoint);
+                adjoint1 = Matrix<T>::Ones(node1->matrix.Rows(),
+                                           node1->matrix.Cols());
+                adjoint2 = Matrix<T>::Ones(node2->matrix.Rows(),
+                                           node2->matrix.Cols());
+                node1->adjoint += adjoint1.cwiseProduct(adjoint);
+                node2->adjoint += adjoint2.cwiseProduct(adjoint);
                 break;
             case Sub:
-                adjoint1 = Matrix(node1->matrix.Rows(), 
-                                        node1->matrix.Cols(),
-                                        ScalarTraits<T>::one());
-                adjoint2 = Matrix(node2->matrix.Rows(),
-                                        node2->matrix.Cols(),
-                                        -ScalarTraits<T>::one());
-                node1->adjoint += adjoint1.CWiseProduct(adjoint);
-                node2->adjoint += adjoint2.CWiseProduct(adjoint);
+                adjoint1 = Matrix<T>::Ones(node1->matrix.Rows(),
+                                           node1->matrix.Cols());
+                adjoint2 = Matrix<T>::Ones(node2->matrix.Rows(),
+                                           node2->matrix.Cols())
+                               * (-ScalarTraits<T>::one());
+                node1->adjoint += adjoint1.cwiseProduct(adjoint);
+                node2->adjoint += adjoint2.cwiseProduct(adjoint);
                 break;
             case CWiseMult:
                 // y = A cwiseproduct X
                 // 逐元素乘法, a_x = a_y cwiseproduct A
-                node1->adjoint += node2->matrix.CWiseProduct(adjoint);
-                node2->adjoint += node1->matrix.CWiseProduct(adjoint);
+                node1->adjoint += node2->matrix.cwiseProduct(adjoint);
+                node2->adjoint += node1->matrix.cwiseProduct(adjoint);
                 break;
             case MatrixMult:
                 // dY = dX * W + x * dW
@@ -222,24 +219,26 @@ public:
                 // 同理dX = 0
                 // a_W = X^T * a_y
                 // 这里如果是X * X, 恰好也成立
-                node1->adjoint += adjoint * node2->matrix.transpose();
-                node2->adjoint += node1->matrix.transpose() * adjoint;
+                node1->adjoint += adjoint * node2->matrix.Transpose();
+                node2->adjoint += node1->matrix.Transpose() * adjoint;
                 break;
-            case Devide:
-                node1->adjoint += adjoint * node2->matrix.transpose();
-                adjoint2 = Matrix(node2->matrix.Rows(),
-                                        node2->matrix.Cols(),
-                                        -ScalarTraits<T>::one());
-                node2->adjoint += adjoint2.CWiseProduct(node1->matrix) / node2->matrix / node2->matrix;
+            case Divide:
+                node1->adjoint += adjoint * node2->matrix.Transpose();
+                adjoint2 = Matrix<T>::Ones(node2->matrix.Rows(),
+                                           node2->matrix.Cols())
+                               * (-ScalarTraits<T>::one());
+                node2->adjoint += adjoint2.cwiseProduct(node1->matrix)
+                                      .cwiseDivision(node2->matrix)
+                                      .cwiseDivision(node2->matrix);
                 break;
             case Transpose:
-                node1->adjoint = std::move(node1->Transpose());
+                node1->adjoint = node1->matrix.Transpose();
                 break;
-            
+
             // a_x = - Y^T * a_y * Y^T
             case Inverse:
-                adjoint1 = matrix.Transpose() * adjoint * matrix.Transpose(); 
-                adjoint1.CWisePoint(-ScalarTraits<T>::one());
+                adjoint1 = matrix.Transpose() * adjoint * matrix.Transpose();
+                adjoint1 = adjoint1 * (-ScalarTraits<T>::one());
                 node1->adjoint += adjoint1;
                 break;
 
@@ -254,16 +253,15 @@ public:
 
             // a_x = J * a_y, J是全1矩阵
             case SumAll:
-                adjoint1 = Matrix(node1->matrix.Rows(),
-                                        node1->matrix.Cols(),
-                                        ScalarTraits<T>::one());
-                node1->adjoint += adjoint1.CWiseProduct(adjoint[0][0]);
+                adjoint1 = Matrix<T>::Ones(node1->matrix.Rows(),
+                                           node1->matrix.Cols());
+                node1->adjoint += adjoint1 * adjoint[0][0];
                 break;
-            
+
             // a_x = J * a_y, Jij是除xij的累乘
             case MultAll:
-                adjoint1 = Derive(MultAll(node1->matrix));
-                node1->adjoint += adjoint1.CWiseProduct(adjoint);
+                adjoint1 = MultAllBackward(node1->matrix);
+                node1->adjoint += adjoint1.cwiseProduct(adjoint);
                 break;
             case LnMultAll:
                 break;
@@ -347,11 +345,9 @@ public:
     void Backward()
     {
         // 先output最后input
-        GradNodePtr last = nullptr;
         for (auto node : backward_list)
         {
-            node->Backward(last);
-            last = node;
+            node->Backward();
         }
     }
 };

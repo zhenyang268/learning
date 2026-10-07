@@ -104,55 +104,48 @@ public:
         return Dual(v, x.derive * ScalarTraits<T>::const_n(0.5) / v);
     }
 
-    friend Dual sumLine(const vector<Dual> &arr, int n)
+    friend Dual sumLine(const std::vector<Dual>& arr)
     {
-        Dual dual;
-        for (int i = 0; i < n; i++) {
-            dual.value  = dual.value + arr[i].value;
-            dual.derive = dual.derive + arr[i].derive;
+        Dual dual(ScalarTraits<T>::zero(), ScalarTraits<T>::zero());
+        for (const Dual& x : arr) {
+            dual = dual + x;
         }
         return dual;
     }
 
     // 对一行 Dual 累乘: Y = Π xi
-    // forward 模式: dY = Σ (total/xi)·dxi, 输出每个位置都等于总积及其全微分
-    friend Dual multLine(const vector<Dual> &arr, int n)
+    // forward: dY = Σ_i (Π_{j≠i} v_j)·dxi —— 前后缀积 O(n), 零因子安全
+    // (修原实现 total/arr[i].value 在零因子处 0/0=NaN 污染整行的 bug, matrix.md §7.1 第 4 条)
+    friend Dual multLine(const std::vector<Dual>& arr)
     {
-        Dual dual;
-        dual.value = ScalarTraits<T>::one();
-        map<int, int> index; // 记录为0的索引
+        const int n = static_cast<int>(arr.size());
+        if (n == 0) return Dual(ScalarTraits<T>::one(), ScalarTraits<T>::zero());
 
-        for (int i = 0; i < n; i++) {
-            dual.value = dual.value * arr[i].value;
-            if (arr[i].value == ScalarTraits<T>::zero()) {
-                index.insert(make_pair(i, 1));
-            }
-        }
+        std::vector<T> pre(n), suf(n);   // pre[i] = Π_{j<i} v_j, suf[i] = Π_{j>i} v_j
+        pre[0] = ScalarTraits<T>::one();
+        for (int i = 1; i < n; i++) pre[i] = pre[i - 1] * arr[i - 1].value;
+        suf[n - 1] = ScalarTraits<T>::one();
+        for (int i = n - 2; i >= 0; i--) suf[i] = suf[i + 1] * arr[i + 1].value;
 
-        T d = T(0);
-        for (int i = 0; i < n; i++) {
-            if (index.find(i) != index.end()) continue;
-            d += (dual.value / arr[i].value) * arr[i].derive;
-        }
-
-        dual.derive = d;
-
-        return dual;
+        T total = pre[n - 1] * arr[n - 1].value;
+        T d = ScalarTraits<T>::zero();
+        for (int i = 0; i < n; i++) d = d + pre[i] * suf[i] * arr[i].derive;
+        return Dual(total, d);
     }
 
-    friend Dual dualFunc(const Dual &x, FuncType type)
+    friend Dual dualFunc(const Dual &x, FunctionType type)
     {
         switch (type)
         {
-        case FuncType::SIN:
+        case FunctionType::Sin:
             return sin(x);
-        case FuncType::COS:
+        case FunctionType::Cos:
             return cos(x);
-        case FuncType::EXP:
+        case FunctionType::Exp:
             return exp(x);
-        case FuncType::LN:
+        case FunctionType::Log:
             return ln(x);
-        case FuncType::SQRT:
+        case FunctionType::Sqrt:
             return sqrt(x);
         default:
             return x;
