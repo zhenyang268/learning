@@ -338,7 +338,7 @@ json.loads(p.read_text(encoding="utf-8"))  # 写回后重读一次，确认没�
 
 ## 八、与 learning 主仓的关系
 
-- 本目录位于 learning 主仓（`~/develop/learning/`）工作树内。git 状态（2026-10-11）：`AGENTS.md` 已随主仓提交；`LEARNING.md`、`TOOLKIT.md`、`modules/` 尚未入库。**是否随主仓提交、还是另建独立仓（如 learning-todo 模式），由用户决定，agent 不要擅自动 git 配置，也不要把未入库文件当作不存在**。
+- 本目录位于 learning 主仓（`~/develop/learning/`）工作树内。git 状态（2026-10-11）：四件套已全部随主仓提交（`AGENTS.md` 于 `5a3dbdb`，其余三份于 `ae5c37d`）。若日后调整目录或独立建仓（如 learning-todo 模式），须同步更新本节与主仓入口文档。
 - 主仓总规约见 `../AGENTS.md`（管 notebook/、graphics/、三个子仓、本目录等）；本文件只约束本目录的笔记追加行为，**在本目录内冲突时以本文件为准**。
 - agent 默认只写文件：**不主动 `git commit`，绝不 `git push`**（用户明确要求时才动 git）。
 

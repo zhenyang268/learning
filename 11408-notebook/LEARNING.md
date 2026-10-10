@@ -207,7 +207,7 @@
 
 ## 十、与主仓的关系
 
-- 本目录位于 learning 主仓（`~/develop/learning/`）工作树内，目前未入库、也未被 .gitignore 忽略；是否提交由用户决定。
+- 本目录位于 learning 主仓（`~/develop/learning/`）工作树内，四件套已随主仓提交（2026-10-11，`ae5c37d`）；后续改动正常随主仓走。
 - 主仓总规约见 `../AGENTS.md`；本文件只约束 11408 学习引导行为，**在本目录内冲突时以本目录文件为准**。
 - agent 默认只写文件：**不主动 `git commit`，绝不 `git push`**。
 - 符号约定（本目录 `.md` 为工程文档，用 ASCII）：`A^T`、`n^2`、`O(n^2)`；不写 Unicode 上标。数学内容落到 `.ipynb` 时改用 KaTeX。
