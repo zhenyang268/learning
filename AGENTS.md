@@ -17,10 +17,14 @@
 | `learning-todo/matrix.md` | Matrix 库设计的**理由**（决策与权衡） | 动 `graphics/src` 矩阵/线代代码之前 |
 | `learning-web/AGENTS.md` | 笔记 web 化的**入口规约**（真源约定、四问判据、硬规则、红线）｜ 在子仓内，只能按绝对路径访问 | 动 `learning-web` 任何东西之前 |
 | `learning-web/DESIGN.md` | 笔记 web 化的架构与契约（决策 D1–D8、数据流、契约样例、A1 切片验收） | 动契约 / 渲染器 / `build/` 之前 |
+| `11408-notebook/LEARNING.md` | **11408 考研学习引擎**（冲刺日历、刷题自主权、判卷/遗忘/归档工作流） | 会话涉及考研学习时，学哪个模块读对应 `modules/` |
+| `11408-notebook/PROGRESS.md` | 11408 学习进度仪表盘（唯一进度真源） | 11408 学习会话开场 |
+| `11408-notebook/AGENTS.md` | 11408 归档规约（对话/照片 → ipynb，只追加） | 归档或判卷照片时 |
 
 **真源约定（避免重复维护）**：同一条事实只在一个文件里定义，别处只引用不重述。
 进度 → `dev-progress.md`；工程验收 → `graphics/plan.md`；库设计理由 → `matrix.md`；
-笔记 web 化 → `learning-web` 子仓（规约 `AGENTS.md`、设计 `DESIGN.md`）。
+笔记 web 化 → `learning-web` 子仓（规约 `AGENTS.md`、设计 `DESIGN.md`）；
+11408 复习/归档/进度 → `11408-notebook/`（引擎 `LEARNING.md` + 仪表盘 `PROGRESS.md` + 归档 `AGENTS.md`）。
 
 ---
 
