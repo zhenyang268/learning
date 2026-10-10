@@ -1,6 +1,6 @@
 # learning — 项目总纲
 
-> **读者**：人（项目全景）｜ **最后更新**：2026-09-22
+> **读者**：人（项目全景）｜ **最后更新**：2026-10-11
 > 给 agent 的协作规约、目录分层与硬规则全部在 **`AGENTS.md`**（每 session 自动加载），本文不重复。
 > 真源约定：进度 → `dev-progress.md`，工程验收 → `graphics/plan.md`，库设计理由 → `learning-todo/matrix.md`。
 
@@ -43,7 +43,10 @@ cd notebook && latexmk -pdf main.tex
 | `learning-todo` | https://github.com/zhenyang268/learning-todo.git | 子仓。session 存档备份（进度管理 + 图片输出），整体不拆。 | 使用中 |
 | `learning-viz` | https://github.com/zhenyang268/learning-viz.git | 计算/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）；供 `web` 计算端点。 | 开发中 |
 | `learning-web` | https://github.com/zhenyang268/learning-web.git | 展示平台 + 笔记转换。统一外壳 + 模块注册；`build/` 把笔记转成知识图谱与阅读面。 | 开发中 |
-| *(future) 408* | 待创建 | 另一后端内容仓，端点自备，`web` 一并托管。 | 未创建 |
+
+仓库内目录（非子仓）：`11408-notebook/` —— 11408 考研学习体系（四件套：归档规约
+`AGENTS.md` / 学习引擎 `LEARNING.md` / 图技能 `TOOLKIT.md` / 模块路线 `modules/`），
+学习对话按规约归档为 `notes/` 下的 ipynb。原 *(future) 408* 子仓计划已被此目录替代。
 
 ---
 
