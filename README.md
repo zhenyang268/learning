@@ -44,8 +44,8 @@ cd notebook && latexmk -pdf main.tex
 | `learning-viz` | https://github.com/zhenyang268/learning-viz.git | 计算/生成层。调 `learning` 接口，产完整结果（轨道、DAG）并本地渲染（ImGui / matplotlib）；供 `web` 计算端点。 | 开发中 |
 | `learning-web` | https://github.com/zhenyang268/learning-web.git | 展示平台 + 笔记转换。统一外壳 + 模块注册；`build/` 把笔记转成知识图谱与阅读面。 | 开发中 |
 
-仓库内目录（非子仓）：`11408-notebook/` —— 11408 考研学习体系（四件套：归档规约
-`AGENTS.md` / 学习引擎 `LEARNING.md` / 图技能 `TOOLKIT.md` / 模块路线 `modules/`），
+仓库内目录（非子仓）：`11408-notebook/` —— 11408 考研学习体系（五件套：归档规约
+`AGENTS.md` / 学习引擎 `LEARNING.md` / 图技能 `TOOLKIT.md` / 模块路线 `modules/`、进度仪表盘 `PROGRESS.md`），
 学习对话按规约归档为 `notes/` 下的 ipynb。原 *(future) 408* 子仓计划已被此目录替代。
 
 ---

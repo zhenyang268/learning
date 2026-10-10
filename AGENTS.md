@@ -175,7 +175,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
   ImGui/matplotlib 本地渲染）；**不再承担笔记转换**（`notes_pipeline` 已移出）
 - `learning-web/`：**独立子仓**，2026-09-22 起有提交。笔记 web 化的全部落地：
   `build/`（转换，Python）+ `graph/`（语义边真源）+ `src/`（Vite 外壳）+ `dist/`（产物，gitignore）
-- `11408-notebook/`：11408（政治/英一/数一/408）考研学习体系，四件套分工
+- `11408-notebook/`：11408（政治/英一/数一/408）考研学习体系，五件套分工
   （`AGENTS.md` 归档规约 + `LEARNING.md` 学习引擎 + `TOOLKIT.md` 图技能 + `modules/` 模块路线，
   真源约定见其内部文件地图）。**只追加 ipynb，不改已有单元**
 - 三者的关系与路径坑见第七节；依赖约定：两个子仓都不建自己的 `pyproject.toml`，
