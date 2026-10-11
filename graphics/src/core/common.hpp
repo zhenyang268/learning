@@ -22,6 +22,9 @@ constexpr double PI_D = std::numbers::pi_v<double>;
 constexpr float EPSILON = std::numeric_limits<float>::epsilon();
 constexpr double EPSILON_D = std::numeric_limits<double>::epsilon();
 
+constexpr float Tol = EPSILON;
+constexpr double Tol_D = EPSILON_D;
+
 
 // 不能按用途去分, 怎么用是上层的责任, 可以提供静态工厂辅助生成
 enum class MatrixType
@@ -40,7 +43,8 @@ enum class MatrixKind
 { 
     Generic,
     Diagonal,
-    Orthogonal, /*酉*/
+    Symmetric, // 酉对称
+    Orthogonal, // 正交矩阵
     RigidTransform,
     SymmetricPositiveDefinite, /*Hermitian正定*/
     Projection 

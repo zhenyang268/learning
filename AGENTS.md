@@ -172,7 +172,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 
 ## 八、目录用途
 
-- `notebook/`：LaTeX 笔记（`.tex`，由 `main.tex` 统一 `\input`，已编译 `main.pdf`）
+- `math-notebook/`：LaTeX 笔记（`.tex`，由 `main.tex` 统一 `\input`，已编译 `main.pdf`）
 - `graphics/`：C++ 图形/线代引擎（`src/`、`demo/` 为 ctest 测试程序、`test/`）
 - `learning-todo/`：**独立子仓**，生成产物与待办输出（`chats/`、`imgs/`、`ns-progress.md`、`matrix.md`）
 - `learning-viz/`：**独立子仓**，2026-09-22 起有提交。职责**收窄为计算/生成层**（Flask `/api/viz/*` +
