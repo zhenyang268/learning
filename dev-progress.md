@@ -54,7 +54,7 @@
 
 ---
 
-## 3. 现状明细（截至 2026-10-13）
+## 3. 现状明细（截至 2026-10-14）
 
 - **数学线**：**只以 `learning-todo/ns-progress.md` 为准**，本文不重复关卡明细。
 - **工程线**（2026-10-13 实地盘点，代码在分支 `graphics_0`）：
@@ -88,8 +88,10 @@
       `Tol` 未定义；`piv[j]` 应为 `result.piv[j]`；主元比较写裸 `>`（违反 D7，
       Complex/Dual 无 `operator>`）；**消元写成 `U(i,k) -= L(i,j)*U(i,k)`（应为 `U(j,k)`）**
       且整段被 `if (max_row != i)` 包住 —— 这两条即使编过数值也全错。
-    - `inverse.hpp`：`scalarTraits` 拼写；`Identity<T>(n)` 应为 `Matrix<T>::Identity(n)`；
-      `diagonal_inverse` 的 `tol` 未声明；`Cholesky`/`Solve` 未 include；`Inverse` 只有声明。
+    - `inverse.hpp` ✅ **已修（2026-10-14，S2）**：`scalarTraits` 拼写；`Identity<T>(n)` 应为
+      `Matrix<T>::Identity(n)`；`diagonal_inverse` 的 `tol` 未声明；`Cholesky`/`Solve` 未 include；
+      `Inverse` 只有声明 → 已补分发。另有两条**编过会算错**的探测 bug：`is_symmetric` 比较对象
+      写成 `AH(j,i)`（实方阵恒判 Symmetric）、`is_orthogonal` 只查对角线。详见 §6 同日条。
     - `eigen.hpp`：`is_symmetric(A)` 缺 `tol`；`Identity(n,n)` 只收 1 参；`ScalarTraits()::one()`
       语法错；`jacobi` 定义在使用点之后；**实现是 2x2 单次旋转，不是 Jacobi 迭代**。
     - `qr.hpp`：`real_t` 未定义、`aplha`/`Cows` 拼写、`QRComposition` 大小写、
@@ -150,12 +152,12 @@
 - [ ] **V1.1 前置已清**（标量契约成立，`Scalar<Complex<double>>` / `Scalar<Dual<float>>` 均成立），
       但 V1.1 本身仍未通过 —— 要等 linalg 落地后，按「double 与 Complex 共用同一份源码」实跑。
 - [ ] **V1 收尾总清单（2026-10-14 探针体检后重排；缺口明细见 `graphics/plan.md` 同日条）**：
-      **进度：① ② 已完成**（`demo/common.hpp` + `solve.hpp` 数值层全绿，ctest 3/3、`solve` 34/34；见 §6 同日条）；
-      余下 ③–⑧ 未动。原文如下：
+      **进度：① ② ③ 已完成**（`demo/common.hpp` + `solve.hpp` 数值层 + `inverse.hpp` 分发；
+      ctest 4/4、`solve` 34/34、`inverse` 48/48；见 §6 同日条）；余下 ④–⑧ 未动。原文如下：
       ① `demo/common.hpp`（`IsApprox` + 实/复/Dual 随机矩阵生成，plan 阶段 1 明确要求）；
       ② 修 `solve.hpp`（`SwapRow` 签名、`max_row`、`Tol`、`result.piv`、主元比较改走 `abs2`、
       **消元改为 `U(i,k) -= L(i,j)*U(j,k)`**、去掉 `if (max_row != i)` 包裹）→ 与 naive 高斯消元对拍；
-      ③ 修 `inverse.hpp`（拼写 / `Matrix<T>::Identity` / `tol` 传参 / 补 include）+ 实现 `Inverse` 分发；
+      ③ ✅ 修 `inverse.hpp`（拼写 / `Matrix<T>::Identity` / `tol` 传参 / 补 include）+ 实现 `Inverse` 分发；
       ④ 重写 `eigen.hpp` 为**真 Jacobi 迭代**（收敛循环 + 非对角元判据 + 特征值排序）；
       ⑤ 实现 `svd.hpp`（经 A^H·A 特征分解）；⑥ 补 `expm`（V1.6 需要）；
       ⑦ 建 5 个验收 demo（V1.1+V1.2 / V1.3 / V1.4 / V1.5 / V1.6+V1.7）并注册 ctest；
@@ -227,6 +229,31 @@
     该思路的干净实现是**原地 LU**（L/U 同一矩阵、单位对角隐式、整行换），探针 `/tmp/probe_inplace_lu.cpp`
     实测 `max|L·U − P·A|` ≤ 4.4e-16（手算 3×3 + 随机 4–8 阶），得到的 L 与方案 (a) 完全一致。
     **用户最终选 (a)**（`SwapMultipliers`，不动 `LUResult` 接口）。
+- **S2 `inverse.hpp` 落地完成（代码改动；`ctest` 4/4，`inverse` 用例 48/48）—— V1.2 硬验收通过**。
+  按用户定的节奏「先搞 `inverse.hpp`，QR/cholesky 那些慢慢引入」，本刀自包含（不碰 cholesky/qr）：
+  - **编译层 5 处**：打开 `#include "linalg/solve.hpp"`；`scalarTraits` → `ScalarTraits`；
+    `Identity<T>(n)` → `Matrix<T>::Identity(n)`（它是静态成员，不是自由函数）；
+    `diagonal_inverse` 补 `tol` 形参；`Cholesky(A)` 调用移除。
+  - **两条"编过会算错"的探测 bug**（比编译错误更该先看）：
+    ① `is_symmetric` 把比较对象写成 `AH(j,i)` = conj(A(i,j))，实际判的是"A(i,j) 的虚部是否为 0"
+    → **实数矩阵恒真，所有实方阵都被判成 Symmetric**（正确判据是比 `AH(i,j)`）；
+    ② `is_orthogonal` 只查 `A^H·A` 的对角线 → `A^T·A` 对角全 1、非对角非零的矩阵被误判成正交。
+    两处统一改成全元素 `abs2 <= tol*tol` 口径（与 `solve.hpp` 一致）。
+  - **分发**：`Inverse(A)` = `Classify(A, DefaultTol<T>(n))` → `Inverse(A, hint)`；
+    `hint` 分支 Diagonal→`diagonal_inverse`、Orthogonal→`A.Adjoint()`、Symmetric/Generic→
+    `lu_inverse`（LU）。**SPD / QR 分支显式 `throw logic_error`**（未接入 cholesky/qr），
+    `is_positive_definite` / `cholesky_inverse` / `qr_inverse` 三处同样 throw —— 不留静默 no-op；
+    `Classify` 的 SPD 档暂时关闭，对称矩阵落到 Generic 走 LU（结果依然正确，只是没用上 Cholesky 优化）。
+  - **验收**：新增 ctest `inverse`（`demo/linalg/inverse.cpp`，48 项）—— V1.2 硬指标
+    ‖A·A⁻¹ − I‖∞ < 1e-8，double n=2..6×4 seed 与 Complex n=2..4×3 seed **共用同一份源码**；
+    实测最差 double **1.18e-13** / complex **9.16e-16**。另含结构分支解析对拍、Classify 语义、
+    hint 一致性、异常路径（奇异 / 非方阵 / 0×0 / SPD / QR）。
+  - **注入反例实测**：`is_symmetric` 还原成 `AH(j,i)` → 2 条 FAIL；`is_orthogonal` 还原成
+    "只查对角" → 1 条 FAIL。闸门有效。
+  - **工具坑（记录）**：注入脚本用 `shutil.copy` 恢复文件后，CMake 可能因 **mtime 粒度**判
+    "up-to-date" 而不重建，跑出的仍是注入版二进制（我一度误读为"恢复后仍 1 FAIL"）——
+    恢复后必须 `touch <源文件>` 或删构建产物再跑。
+  - 新增 **S2a**（`cholesky.hpp` 修复 + 打开 SPD 档）已登记进 `graphics/plan.md` 的 S 清单。
 
 ### 2026-10-13
 

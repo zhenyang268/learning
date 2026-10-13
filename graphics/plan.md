@@ -321,9 +321,19 @@
     验收：新增 ctest 用例 **`solve`**（`demo/linalg/solve.cpp`，34 项检查）+ 测试基建
     **`demo/common.hpp`**（`MaxAbs2`/`NormInf`/`IsApprox`/实-复-Dual 随机矩阵/`Checker`）。
     **注入反例实测**：去掉乘子换行 → 15 条 FAIL；恢复 `if (max_row != i)` → 26 条 FAIL。
-  - `inverse.hpp`：`scalarTraits` 拼写（应为 `ScalarTraits`）；`Identity<T>(n)` 应为
-    `Matrix<T>::Identity(n)`；`diagonal_inverse` 里 `tol` 未声明；`Cholesky(A)`/`Solve`
-    均未 include；`Inverse` 只有声明、无定义。
+  - [x] `inverse.hpp`（**2026-10-14 修复，S2**）：`scalarTraits` 拼写（应为 `ScalarTraits`）；
+    `Identity<T>(n)` 应为 `Matrix<T>::Identity(n)`；`diagonal_inverse` 里 `tol` 未声明；
+    `Cholesky(A)`/`Solve` 均未 include；`Inverse` 只有声明、无定义。另有两处**编过会算错**的
+    探测 bug：① `is_symmetric` 把比较对象写成 `AH(j,i)`（= conj(A(i,j))），实际判的是
+    "A(i,j) 的虚部是否为 0"，实数矩阵恒真 → **所有实方阵都被判成 Symmetric**；
+    ② `is_orthogonal` 只查对角线，`A^T·A` 对角全 1 但非对角非零的矩阵被误判成正交。
+    另 `is_positive_definite`/`cholesky_inverse`/`qr_inverse` 三处依赖未接入的 cholesky/qr，
+    改为**显式 throw**（不留静默 no-op），`Classify` 的 SPD 档暂时关闭。
+    验收：新增 ctest 用例 **`inverse`**（`demo/linalg/inverse.cpp`，48 项检查）—— V1.2 硬指标
+    ‖A·A⁻¹ − I‖∞ < 1e-8（double n=2..6 与 Complex n=2..4 共用同一份源码），实测最差
+    double 1.18e-13 / complex 9.16e-16。
+    **注入反例实测**：`is_symmetric` 还原成 `AH(j,i)` → 2 条 FAIL；`is_orthogonal` 还原成
+    "只查对角" → 1 条 FAIL。
   - `eigen.hpp`：`eig` 调 `is_symmetric(A)` 缺 `tol` 实参；`Identity(n, n)` 只收 1 参；
     `ScalarTraits()::one()/zero()` 语法错；`jacobi` 定义在使用点之后（非 ADL 不可见）；
     **且实现是 2x2 单次旋转，不是 Jacobi 迭代**（无收敛循环、无非对角元判据）。
@@ -337,8 +347,13 @@
   - 收尾步骤 **S1–S7**（2026-10-14 定稿：一步一文件一用例一提交，不并发开两个文件）：
     - **S1 `solve.hpp`**（LU + Solve）+ `demo/common.hpp` 测试基建 + `demo/linalg/solve.cpp`
       —— ✅ 已完成
-    - S2 `inverse.hpp`（补 `Inverse` 分发 + 修 `scalarTraits`/`Identity<T>`/`tol`/`Cholesky`）
-      + `demo/linalg/inverse.cpp` → **V1.2 硬验收**
+    - **S2 `inverse.hpp`**（补 `Inverse` 分发 + 修 `scalarTraits`/`Identity<T>`/`tol`/`Cholesky`）
+      + `demo/linalg/inverse.cpp` → **V1.2 硬验收** —— ✅ 已完成（2026-10-14）
+      （SPD / QR 分支本刀显式 throw，待 S2a / S6 接入）
+    - **S2a `cholesky.hpp`**（2026-10-14 新增）：修 `L(i,j) -=`/`L(i,j) /=`（Complex/Dual 无复合
+      赋值，D7）、`L(i,i) -= L(i,j)*L(i,j)` 漏 `conj`、`if (L(i,i) <= 0)`（复数无 `<=`）、
+      `sqrt` 未限定命名空间、`cholesky_r` 调用了定义在它之后的 `cholesky_recursive`；
+      然后打开 `Classify` 的 SPD 档，接上 `cholesky_inverse` 与 `is_positive_definite`
     - S3 `eigen.hpp` 重写为**真 Jacobi 迭代**（现为 2×2 单次旋转）+ `demo/linalg/eigen.cpp`
       → **V1.3**
     - S4 `svd.hpp`（经 A^H·A 特征分解组装）+ `demo/linalg/svd.cpp` → **V1.4**
