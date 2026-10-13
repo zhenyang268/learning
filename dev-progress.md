@@ -1,6 +1,6 @@
 # dev-progress.md — 进度与排期
 
-> **读者**：人 + agent ｜ **最后更新**：2026-10-13 ｜ **本文是「进度」的唯一真源**
+> **读者**：人 + agent ｜ **最后更新**：2026-10-14 ｜ **本文是「进度」的唯一真源**
 >
 > **真源声明**
 > - 本文是**总纲式进度真源**：回答「整体现在在哪、下一步做什么」。
@@ -20,7 +20,7 @@
 | 线 | 当前位置 | 下一个动作 |
 |---|---|---|
 | **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
-| **工程** | `graphics` 阶段 1 中段：C++20 ✔、scalar/complex/matrix 重写 ✔、dual 修 ✔、LU+Solve ✔；**2026-10-13：`compute_graph` 基线成立（forward-mode）+ 接口层 bug 修完（标量契约 `fromReal`、Dual/Complex 路径、反向模式标记），ctest 2/2 全绿**；`inverse/eigen/svd` 未落地，V1.x 验收仍未跑 | ① 补 `Solve` 收尾 ② 写 V1.2 验收 demo ③ inverse/eigen/svd |
+| **工程** | `graphics` 阶段 1 中段：C++20 ✔、scalar/complex/matrix 重写 ✔、dual 修 ✔；**2026-10-13/14：`compute_graph` 基线成立（forward-mode）、接口层 bug 修完（标量契约 `fromReal` / Dual·Complex 路径 / 反向模式标记）、ctest 2/2 全绿，并新增 `graphics/run_tests.sh` 测试入口**。但 **V1.1–V1.7 一条都没通过**：linalg 528 行**从未被任何编译单元 include 过**（探针实测 32 个编译错误），`svd.hpp`/`expm.hpp` 仍是 0 字节，`demo/common.hpp` 不存在 | ① `demo/common.hpp` ② 修 `solve.hpp` ③ 修 `inverse.hpp` ④ 重写 `eigen.hpp` 为真 Jacobi 迭代 ⑤ `svd.hpp` ⑥ `expm` ⑦ 建 5 个验收 demo（清单见 §4） |
 | **小项目** | 未解锁 | 等 Gate A（见第 2 节） |
 | **笔记 web 化** | `learning-web` 已落**规约 + 设计 + 目录骨架**（`AGENTS.md` / `DESIGN.md` / `build/` / `graph/`），实现未开工 | 按 `learning-web/AGENTS.md` §12 第 1 步：`uv add --dev pypandoc-binary` |
 
@@ -62,7 +62,10 @@
     `core/scalar.hpp`（Scalar concept + traits）✔；`core/complex.hpp`（130 行）✔；
     `core/matrix.hpp` 重写 ✔（静态工厂 Zero/Ones/Identity/Diagonal、扁平行主序、无缓存层）；
     `autodiff/dual.hpp` 修 ✔（multLine 零因子 bug 已按 matrix.md §7.1 修为前后缀积、
-    operator/ 除零分支已删、`using std::` ADL 两步法已用）；`linalg/solve.hpp` LU+Solve ✔（98 行）。
+    operator/ 除零分支已删、`using std::` ADL 两步法已用）。
+    **更正（2026-10-14 探针实测）**：上面记的「`linalg/solve.hpp` LU+Solve ✔（98 行）」
+    不成立 —— 原 ✔ 的含义是"文件存在"，不是"能编译"。实例化实测报错，详见下面 linalg 小节。
+    `linalg/` 下真正能通过实例化的只有 `cholesky.hpp`。
   - **原卡点已解（2026-10-13 会话）**：`demo/autodiff/compute_graph.cpp` 编译不过，
     **真实根因不是「`LnMultAll`/`Function` 未声明」** —— 这两个名字是 `GradOp` 的合法枚举值
     （`common.hpp`）。实际是三类问题：① `GradOp` 改成 `enum class` 后 `grad_graph.hpp` 的
@@ -74,9 +77,28 @@
   - **基线边界（仍存在，见第二批修复说明）**：未实现算子（`CWisePow`/`LnMultAll`/
     `CrossEntropy`/`Sigmoid`/`Relu`/`Tanh`/`Softmax`）在 `Forward` 里统一 **throw「未实现」**
     （原来是静默 `break`，会返回零值）；反向模式整体未实现。
-  - 空壳文件：`linalg/dot.hpp`、`operator.hpp`、`svd.hpp`、`autodiff/lexer.hpp`（均 0 字节）；
-    `eigen.hpp` 只有 38 行声明（Jacobi 未实现）；`inverse.hpp` 有 is_* 探测函数但
-    `Inverse()` 本体未写、且引用未定义的 `Cholesky(A)`、`scalarTraits<T>` 拼写错误。
+  - **linalg 实际状态（2026-10-14 探针实测，取代原先的"空壳文件"描述）**：
+    自 10-13 起该目录有变动 —— `dot.hpp` 已删（`grep` 确认无引用残留），
+    新增 `cholesky.hpp`(67) / `qr.hpp`(133) / `householder.hpp`(0) / `expm.hpp`(0)，
+    `eigen.hpp` 38→89 行、`inverse.hpp` 111 行、`operator.hpp` 30 行。
+    **但 `demo/` 只有 `scalar_traits` 与 `compute_graph` 两个 ctest，没有任何 TU include 过
+    `linalg/`** —— 528 行代码一次都没进编译器。用 `-fsyntax-only` 实例化各入口实测，
+    两轮共 32 个编译错误：
+    - `solve.hpp`：`SwapRow` 定义 2 参而调用传 3 参；函数体用未声明的 `max_row`；
+      `Tol` 未定义；`piv[j]` 应为 `result.piv[j]`；主元比较写裸 `>`（违反 D7，
+      Complex/Dual 无 `operator>`）；**消元写成 `U(i,k) -= L(i,j)*U(i,k)`（应为 `U(j,k)`）**
+      且整段被 `if (max_row != i)` 包住 —— 这两条即使编过数值也全错。
+    - `inverse.hpp`：`scalarTraits` 拼写；`Identity<T>(n)` 应为 `Matrix<T>::Identity(n)`；
+      `diagonal_inverse` 的 `tol` 未声明；`Cholesky`/`Solve` 未 include；`Inverse` 只有声明。
+    - `eigen.hpp`：`is_symmetric(A)` 缺 `tol`；`Identity(n,n)` 只收 1 参；`ScalarTraits()::one()`
+      语法错；`jacobi` 定义在使用点之后；**实现是 2x2 单次旋转，不是 Jacobi 迭代**。
+    - `qr.hpp`：`real_t` 未定义、`aplha`/`Cows` 拼写、`QRComposition` 大小写、
+      `ScalarTraits<double>::Zero` 不存在、`Dot` 调不到。
+    - `operator.hpp`：`Dot` 是成员函数残骸（自由函数里用 `this->rows/cols/data`）。
+    - `cholesky.hpp` **是唯一能通过实例化的**。
+    - 空文件：`svd.hpp`（V1.4 必需）、`expm.hpp`（V1.6 必需）、`householder.hpp`。
+    - 本阶段要求的 `demo/common.hpp`（`IsApprox` / 随机矩阵生成）**不存在**。
+    完整缺口清单与收尾最小路径见 `graphics/plan.md`「待办 / 已知问题」2026-10-14 条。
   - **第二批修复（2026-10-13 同会话，基线的"接口层 bug"）**：把第一批列出的"已知边界"里
     属于**真 bug** 的三条改掉 ——
     ① `scalar.hpp` 的标量契约漂移：代码写的是设计文档里不存在的 `const_n(内层 T)`，
@@ -121,14 +143,27 @@
       `ScalarTraits<Dual<T>>::conj/abs2` 成员名、`Derive` 收临时量、`Dual::operator=` 弃用告警、
       arity/`matrixF` 越界保护、`SumAll` 占位形状；反向模式明确拒绝执行。
       新增 ctest `scalar_traits`（44 项）+ `compute_graph`（36 项）
-- [ ] 落「基线」提交（用户自行 commit/push；父仓 3 文件 + learning-todo 的 `matrix.md` 各仓分开提交）
-- [ ] **V1.1 前置已清（标量契约成立），但 V1.1 本身仍未通过** —— 需 linalg 落地后按
-      「double 与 Complex 共用同一份源码」实跑
-- [ ] 检查 `Solve` 落盘版细节（消元循环里 `if (max_row != i)` 可疑：与 piv 交换逻辑冲突，需对拍验证）
-- [ ] 写 V1.2 验收 demo：随机矩阵求逆残差 ‖A·A^-1 − I‖∞ < 1e-8（先做实数，复数跟进）
-- [ ] `linalg/inverse.hpp`：`Inverse(A)` = LU + 逐列回代（唯一方法）
-- [ ] `linalg/eigen.hpp`：Jacobi 旋转法（当前只有声明）
-- [ ] `linalg/svd.hpp`：经 A^H·A 特征分解组装 SVD（当前 0 字节）
+- [x] 落「基线」提交 → **2026-10-13/14 完成**：父仓 `graphics_0` 三次提交 ——
+      `375f618`（基线修复）、`c82c7ed`（新增 `graphics/run_tests.sh` + AGENTS.md 登记）、
+      `1f33b7a`（脚本补 `--build-only` / `--test-only`）；子仓 `learning-todo` `e733363`（`matrix.md`）。
+      **均未 push**（推送由用户自行决定）。
+- [ ] **V1.1 前置已清**（标量契约成立，`Scalar<Complex<double>>` / `Scalar<Dual<float>>` 均成立），
+      但 V1.1 本身仍未通过 —— 要等 linalg 落地后，按「double 与 Complex 共用同一份源码」实跑。
+- [ ] **V1 收尾总清单（2026-10-14 探针体检后重排；缺口明细见 `graphics/plan.md` 同日条）**：
+      ① `demo/common.hpp`（`IsApprox` + 实/复/Dual 随机矩阵生成，plan 阶段 1 明确要求）；
+      ② 修 `solve.hpp`（`SwapRow` 签名、`max_row`、`Tol`、`result.piv`、主元比较改走 `abs2`、
+      **消元改为 `U(i,k) -= L(i,j)*U(j,k)`**、去掉 `if (max_row != i)` 包裹）→ 与 naive 高斯消元对拍；
+      ③ 修 `inverse.hpp`（拼写 / `Matrix<T>::Identity` / `tol` 传参 / 补 include）+ 实现 `Inverse` 分发；
+      ④ 重写 `eigen.hpp` 为**真 Jacobi 迭代**（收敛循环 + 非对角元判据 + 特征值排序）；
+      ⑤ 实现 `svd.hpp`（经 A^H·A 特征分解）；⑥ 补 `expm`（V1.6 需要）；
+      ⑦ 建 5 个验收 demo（V1.1+V1.2 / V1.3 / V1.4 / V1.5 / V1.6+V1.7）并注册 ctest；
+      ⑧ 加一个「linalg 编译烟测」用例（只 include + 实例化各入口），防止"文件在、编译器从没跑过"复发。
+- [x] ~~检查 `Solve` 落盘版细节（消元循环里 `if (max_row != i)` 可疑）~~
+      → **2026-10-14 探针证实"可疑"为真**：该 `if` 会整段跳过消元，且消元公式本身用错了行
+      （`U(i,k)` 应为 `U(j,k)`）。详见 §3 的 linalg 小节。
+- [x] ~~写 V1.2 验收 demo~~ / `inverse.hpp` / `eigen.hpp` / `svd.hpp` 四条 → 已并入上面的 V1 收尾总清单。
+- [ ] `qr.hpp` / `operator.hpp` 是 10-13 后新建的半成品（`qr` 不在阶段 1 清单）：
+      要么修到能编译再进阶段 2，要么先移出构建视野 —— 但现在它们连编译都不过（见 §3）。
 
 ---
 
@@ -142,6 +177,32 @@
 ---
 
 ## 6. 进度日志（append-only：只追加，不修改历史条目）
+
+### 2026-10-14
+
+- **V1 收尾体检（agent 会话，纯探针，无代码改动）**：用户问「v1.0 可以收尾了吗」→ **答案：不能**。
+  数据已同步到 `graphics/plan.md` 同日条与本文 §0/§3/§4。
+  - **根因：`linalg/` 528 行从未被编译器看过** —— `demo/` 只有 `scalar_traits`、`compute_graph`
+    两个 ctest，没有任何 TU include 过 `linalg/*.hpp`。所以先前记的"已落地"实际含义是"文件存在"。
+  - 两个 `-fsyntax-only` 实例化探针共 **32 个编译错误**（`solve`+`inverse`+`eigen` 一轮 16 个；
+    `cholesky`+`qr`+`operator` 一轮 16 个）。**`cholesky.hpp` 是唯一能通过实例化的**。
+    空文件：`svd.hpp`（V1.4 必需）、`expm.hpp`（V1.6 必需）、`householder.hpp`；
+    `dot.hpp` 已删（`grep` 确认无引用残留）。
+  - **编译错误之外还有算法错误**（编过也会算错）：`solve.hpp` 消元写成 `U(i,k) -= L(i,j)*U(i,k)`
+    （应为 `U(j,k)`），且整段被 `if (max_row != i)` 包住 —— 早先记的"`if (max_row != i)` 可疑"
+    被实测证实；主元比较写裸 `>`（违反 D7，Complex/Dual 没有 `operator>`）；
+    `eigen.hpp` 是 2x2 单次旋转，**不是 Jacobi 迭代**（无收敛循环、无非对角元判据）。
+  - V1.1–V1.7 逐条全未通过：V1.4 缺 `svd.hpp`、V1.6 缺 `expm`、V1.1/V1.2/V1.5 卡在 linalg 编不过、
+    V1.3 卡在 eigen 非迭代且编不过、V1.7 无 demo；plan 明确要求的 `demo/common.hpp` 不存在。
+    8 步收尾最小路径见 §4。
+- **新增 `graphics/run_tests.sh`（10-13 傍晚会话，已提交）**：配置 + 构建 + ctest 一条链，
+  选项 `-c` 从零 / `-d` 明细 / `-w` 告警 / `-b` 指定目录 / `-j` 并行度 / `-l` 列表 /
+  `--build-only` 只构建 / `--test-only` 只测试 / `-h`；退出码 0 全绿 / 1 构建失败 / 2 用例失败 / 64 参数错。
+  用例清单由 `ctest -N -V` 自省（新用例自动带出），cwd 无关，非 tty 关色。
+  已登记进 `AGENTS.md` 第三节「命令」。
+- **提交（10-13 傍晚，均未 push）**：父仓 `graphics_0` —— `375f618`（基线修复，12 文件）、
+  `c82c7ed`（`run_tests.sh` + AGENTS.md 登记，含先前已写未提交的 learning-408 条款）、
+  `1f33b7a`（脚本补 `--build-only`/`--test-only`）；子仓 `learning-todo` —— `e733363`（`matrix.md`）。
 
 ### 2026-10-13
 
