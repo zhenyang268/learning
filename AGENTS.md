@@ -20,11 +20,13 @@
 | `11408-notebook/LEARNING.md` | **11408 考研学习引擎**（冲刺日历、刷题自主权、判卷/遗忘/归档工作流） | 会话涉及考研学习时，学哪个模块读对应 `modules/` |
 | `11408-notebook/PROGRESS.md` | 11408 学习进度仪表盘（唯一进度真源） | 11408 学习会话开场 |
 | `11408-notebook/AGENTS.md` | 11408 归档规约（对话/照片 → ipynb，只追加） | 归档或判卷照片时 |
+| `learning-408/README.md` | 408 实践代码导航（**主题 → 代码映射真源**：jos/cs144/csapp 子仓索引与阅读指南）｜ 独立子仓，只能按绝对路径访问 | 复习 408 需要引实践代码时，**先读它再引代码，不得凭记忆编造路径** |
 
 **真源约定（避免重复维护）**：同一条事实只在一个文件里定义，别处只引用不重述。
 进度 → `dev-progress.md`；工程验收 → `graphics/plan.md`；库设计理由 → `matrix.md`；
 笔记 web 化 → `learning-web` 子仓（规约 `AGENTS.md`、设计 `DESIGN.md`）；
-11408 复习/归档/进度 → `11408-notebook/`（引擎 `LEARNING.md` + 仪表盘 `PROGRESS.md` + 归档 `AGENTS.md`）。
+11408 复习/归档/进度 → `11408-notebook/`（引擎 `LEARNING.md` + 仪表盘 `PROGRESS.md` + 归档 `AGENTS.md`）；
+408 实践代码映射 → `learning-408/README.md`（**引用 408 相关代码一律先查它，不许 agent 瞎猜**）。
 
 ---
 
@@ -46,6 +48,8 @@ uv run pytest                               # Python 测试
 cmake -S graphics -B graphics/build -DCMAKE_BUILD_TYPE=Debug
 cmake --build graphics/build -j             # 构建 C++ 库与 demo
 ctest --test-dir graphics/build --output-on-failure   # 跑 C++ 测试
+./graphics/run_tests.sh                     # C++ 测试一键入口(配置+构建+ctest)
+                                            #   -c 从零构建 | -d 打各用例内部明细 | -w 开 -Wall -Wextra | -h 帮助
 latexmk -pdfxe -interaction=nonstopmode main.tex   # 编译笔记（notebook/ 下执行；必须 xelatex 引擎——`-pdf` 走 pdfLaTeX 会报 ctex `fontset 'mac' unavailable` 直接卡住等交互输入，2026-09-24 实测）
 bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048"
 ```
@@ -142,7 +146,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
   跑命令用 `uv run xxx`，装包用 `uv add xxx`。
   **禁止**使用系统 `python3`（`/usr/bin` 的 3.9.6）或裸 `pip install`。
   全局 `python3` 是 uv 托管的 3.14（`~/.local/bin`）；Homebrew python 已卸载，**不要再装回**。
-- **三子仓**：`learning-todo/`、`learning-viz/`、`learning-web/` 是**独立 git 仓**，各有自己的 remote，
+- **四子仓**：`learning-todo/`、`learning-viz/`、`learning-web/`、`learning-408/` 是**独立 git 仓**，各有自己的 remote，
   父仓不跟踪（无 `.gitmodules`、无 gitlink）。
   → 它们在 `git worktree` 与新的 clone 中**都不出现**，必须用绝对路径访问
   （如 `~/develop/learning/learning-todo/`）；**改动须在各自仓内提交**。
@@ -182,6 +186,9 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 - `11408-notebook/`：11408（政治/英一/数一/408）考研学习体系，五件套分工
   （`AGENTS.md` 归档规约 + `LEARNING.md` 学习引擎 + `TOOLKIT.md` 图技能 + `modules/` 模块路线，
   真源约定见其内部文件地图）。**只追加 ipynb，不改已有单元**
+- `learning-408/`：**独立子仓**，408 实践代码汇总仓。本体只保留一份**主题 → 代码导航**（`README.md`），
+  三个实践子仓 `jos/`（操作系统）、`cs144/`（网络）、`csapp/`（组成）被其 `.gitignore` 忽略、各自独立管理。
+  **复习 408 要引实践代码时，先读 `learning-408/README.md` 定位子仓与文件路径，禁止凭记忆编造代码引用。**
 - 三者的关系与路径坑见第七节；依赖约定：两个子仓都不建自己的 `pyproject.toml`，
   `uv add` 会写进**父仓** `pyproject.toml` + `uv.lock`
 
@@ -189,7 +196,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 
 ## 九、不要修改（Do Not Modify）
 
-- **三个子仓不属于父仓**：`learning-todo/`、`learning-viz/`、`learning-web/` 的改动只能在各自仓内提交。
+- **四个子仓不属于父仓**：`learning-todo/`、`learning-viz/`、`learning-web/`、`learning-408/` 的改动只能在各自仓内提交。
 - **`Matrix<T>` 的既定设计**（哑容器、不加缓存层、不把算法塞进类、实复差异只走 traits）：
   这些已在 `matrix.md` 里定稿并给出理由。需要改设计，**先改 `matrix.md` 并写清理由**，再动代码。
 - **已写好的 `.ipynb` 单元**：只追加新单元，不重写旧单元。
