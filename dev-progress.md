@@ -150,6 +150,8 @@
 - [ ] **V1.1 前置已清**（标量契约成立，`Scalar<Complex<double>>` / `Scalar<Dual<float>>` 均成立），
       但 V1.1 本身仍未通过 —— 要等 linalg 落地后，按「double 与 Complex 共用同一份源码」实跑。
 - [ ] **V1 收尾总清单（2026-10-14 探针体检后重排；缺口明细见 `graphics/plan.md` 同日条）**：
+      **进度：① ② 已完成**（`demo/common.hpp` + `solve.hpp` 数值层全绿，ctest 3/3、`solve` 34/34；见 §6 同日条）；
+      余下 ③–⑧ 未动。原文如下：
       ① `demo/common.hpp`（`IsApprox` + 实/复/Dual 随机矩阵生成，plan 阶段 1 明确要求）；
       ② 修 `solve.hpp`（`SwapRow` 签名、`max_row`、`Tol`、`result.piv`、主元比较改走 `abs2`、
       **消元改为 `U(i,k) -= L(i,j)*U(j,k)`**、去掉 `if (max_row != i)` 包裹）→ 与 naive 高斯消元对拍；
@@ -203,6 +205,28 @@
 - **提交（10-13 傍晚，均未 push）**：父仓 `graphics_0` —— `375f618`（基线修复，12 文件）、
   `c82c7ed`（`run_tests.sh` + AGENTS.md 登记，含先前已写未提交的 learning-408 条款）、
   `1f33b7a`（脚本补 `--build-only`/`--test-only`）；子仓 `learning-todo` —— `e733363`（`matrix.md`）。
+- **S1 `solve.hpp` 数值层修复完成（代码改动；`ctest` 3/3，`solve` 用例 34/34）**。
+  节奏按用户定的「一步一条 → 只解释清楚 → 再动手 → 单独编译/跑用例」：
+  - **③ 容差**：删全局 `Tol`（**float** 的 eps 1.19e-7，用于 `Matrix<double>` 差 9 个数量级）
+    → `DefaultTol<T>(n) = 8n·eps`，判据 `abs2(p) <= tol*tol`。老写法还藏了第二条缺陷：
+    左边是平方量、右边不平方 → 等效阈值 √Tol = 3.45e-4（探针 `/tmp/probe_tol.cpp` 实测：
+    条件数 1e12 的良定 2×2 被老判据误判奇异）。依据 D12 + §10.8 ① + §2.4。
+  - **④ 边界检查**：`LU` 非方阵 / `Solve` 的 B 行数不符 → `throw std::invalid_argument`（D12 四分类）。
+    **没给 `matrix.hpp` 的 `operator()` 加检查** —— D12：越界属编程 bug → assert，`at()` 才是检查版，
+    维度校验放 API 边界即可。此前 `LU(Matrix(2,3))` 越界读、`Solve(I₃,B₂ₓ₁)` 越界写 = 静默 UB（用例 SIGABRT）。
+  - **① 删 `if (max_row != i)`**（**用户自己判断出来的**）：`max_row` 是换行**前**的行号，换行后主元行
+    已坐在 `j` 上，"不消主元行"由 `i > j` 天然保证；该判定实际**跳错了行**（跳掉的是被换进来的旧第 j 行，
+    那行此刻正带着非零 `U(i,j)`）。只在 `max_row > j` 且发生换行时触发 → **n=2 永不触发，n≥3 才炸**。
+  - **② 乘子随换行**：新增 `SwapMultipliers(L, r1, r2, upto)`，换 U 行时同步换 L 的 `[0, j)` 乘子列；
+    **不能整行换**（单位下三角的对角 1 与行号绑定，整行换会把 1 搬到上三角）。
+  - 修复路径：OK **3 → 7**（③④）→ **19**（①）→ **34**（②）。最差相对误差
+    `P·A−L·U` 1.187e0 → **1.135e-16**，`A·X−B` 2.996e0 → 1.317e-15，复数 3.926e0 → **6.218e-16**。
+  - **注入反例实测**：去掉 `SwapMultipliers` 调用 → **15 条 FAIL**（恰是 ② 的下游全部）。
+  - 期间的替代思路讨论（用户提「先把 A 按主元编号排好再减」）：方向对，但主元是**自适应**选的
+    （第 j 列主元取决于前 j−1 列消元后的数值），排列无法一次排完，只能与消元交替；
+    该思路的干净实现是**原地 LU**（L/U 同一矩阵、单位对角隐式、整行换），探针 `/tmp/probe_inplace_lu.cpp`
+    实测 `max|L·U − P·A|` ≤ 4.4e-16（手算 3×3 + 随机 4–8 阶），得到的 L 与方案 (a) 完全一致。
+    **用户最终选 (a)**（`SwapMultipliers`，不动 `LUResult` 接口）。
 
 ### 2026-10-13
 
