@@ -290,7 +290,67 @@
     已给 `CheckReconstruct` / `CheckAgainstLU` 加 try，并把异常记成一条 FAIL。
   - **未动**：`inverse.hpp` —— SPD 档的打开、`cholesky_inverse` / `is_positive_definite` 的接入
     留作 **S2a-2**（当前三处仍显式 throw），按「一刀一文件」纪律分开做。
-  - **提交**：S2a 由用户放行后单独一刀（2026-10-14，未 push）。
+  - **提交**：S2a 由用户放行后单独一刀 `daefb3e`（2026-10-14，未 push）。
+
+- **S2a-2 `inverse.hpp` SPD 档完成**（工程线，代码改动；`ctest` **5/5**，`inverse` **48 → 78 项**全过）。
+  用户指令「可以开启 spd 吧」；只在 `inverse.hpp` + `demo/linalg/inverse.cpp` 动刀，`cholesky.hpp` 未碰。
+  - **三处改动**：
+    ① `is_positive_definite(A)` 由 `throw logic_error` 改为"cholesky 走通即真"（matrix.md §3.2 的
+    规格就这一句）。**只 catch `std::runtime_error`**（cholesky 判出的非正定/近奇异），别的异常照常
+    外传不吞；非方阵/空矩阵**提前返回 false**（不问 cholesky，免得把入参错解读成"非正定"）。
+    ② `cholesky_inverse(A)`：`A⁻¹ = (L⁻¹)ᴴ·L⁻¹`，实现为 `cholesky_solve(A, Identity(n))` ——
+    展开正是"L·Y = I 前代 + Lᴴ·X = Y 回代"，同一条路径，直接复用那份压过 98 项验收的代码。
+    ③ `Classify`：SPD 档**嵌进 `is_symmetric` 分支内部**，不是平铺的同级 if。
+  - **本刀的核心坑（单独记）**：`inverse.hpp` 原注释写 `Diagonal -> Orthogonal -> Symmetric ->
+    (SPD) -> Generic`，按字面**平铺**成同级 if，SPD 档永远不可达 —— 因为 **SPD ⊂ Symmetric**，
+    上一行 `is_symmetric` 先 return 就把它吃掉了。正确写法是在对称分支内部筛子类。
+    附带结论：`Diagonal` 排在 SPD 之前是有意的（单位阵落 Diagonal，逐元倒数比 Cholesky 更省）。
+  - **取舍（已认可）**：改完后每个对称矩阵都会多跑一次 Cholesky（非正定则 throw 后 catch，当判据用），
+    白付一次 O(n³/3)。可接受 —— `Classify` 本质就是"付一次 O(n³) 探测换后续用上最优算法"，
+    且 `is_orthogonal` 那步本来就要算 `Aᴴ·A`，总体量级不变。
+  - **验收**：`inverse` 用例 **48 → 78 项**（新增 G 段 30 项）。V1.2 硬指标最差
+    **double 1.18e-13 / complex 9.16e-16** 与 S2 持平；随机 SPD（n=2..6，S = M·Mᵀ + n·I）走 cholesky
+    与走 LU 的逐元差 **≤ 1.11e-16**、残差 ≤ 4.44e-16；`is_positive_definite` 真/假两侧都测
+    （正定 / 不定 / 全负 / 半正定奇异 / 单位阵 / 非方阵）；复 Hermitian 正定走同一份源码。
+  - **注入反例**：① Classify 的 SPD 档平铺成同级 if（制造顺序陷阱）→ **8 条 FAIL**，全部是 SPD 判据；
+    ② 正定判据恒 true（吞掉 cholesky 的否定结论）→ **5 条 FAIL**，全部落在"非正定"一侧。
+    两次注入均恢复后复跑 5/5，`grep 注入` 无残留。
+  - **提交**：S2a-2 单独一刀 `f73790b`（2026-10-14，未 push）。
+
+- **S3 `eigen.hpp` 真 Jacobi 迭代完成**（工程线，代码改动；`ctest` **6/6**，`eigen` **119 项**全过；**V1.3 通过**）。
+  用户开工前自己把理解纠正过来了（原以为"把非对角元改成 0 就完事"，意识到"还是得套个 while 循环"）——
+  这个判断是对的，下面第①条注入反例正是它的硬证据。
+  - **原实现三层问题**（40 行的 `eig_symmetric`）：① **只扫一遍**（无收敛循环、无非对角判据）；
+    ② `rotate()` 做整体 `R·A·R^T`（每次 O(n³)，且用 `Transpose` 而非 `Adjoint`，复数域方向就错）；
+    ③ `jacobi()` 硬编码 `double`，`ScalarTraits()::one()` 语法错，`Identity(Rows, Cols)` 多传一参，
+    `eig(A)` 调 `is_symmetric(A)` 缺 tol、且调了根本不存在的 `eig_general(A)`。
+  - **重写结构**（cyclic Jacobi）：
+    · 外层 `for sweep` 一轮轮扫，内层遍历全部 i<j；收敛判据 `off(A)² = Σ_{i≠j}|A(i,j)|² <= tol²`。
+    · **容差标尺只算一次**：酉相似变换保持 Frobenius 范数，故 `tol = DefaultTol<T>(n) * ‖A‖_F`（D12）。
+    · **单元素跳过阈值** `tol²/nd`（nd = 非对角元个数）—— 即使剩余元素全被跳过，总和也不超过 tol²。
+    · 每步**只更新第 p、q 两行两列**（O(n)），不再整体旋转。
+    · **Hermitian 的相位**：酉阵 `U = [[c, -s·ph], [s·conj(ph), c]]`，`ph = z/|z| = e^{iφ}`；
+      实对称下 `z` 为实、`ph = ±1`，同一份代码自动退化 —— 这就是 V1.1「同一份源码」的落点。
+    · **对角元走解析式** `(a+b)/2 ± hypot(a−b, 2|z|)/2`，与 `θ = 0.5·atan2(2|z|, a−b)` **必须配套**：
+      取 θ+π/2 同样能消零，但会把两个特征值对调（这一条在稿纸上先算错过一次，靠 2×2 数值验证找回）。
+    · 100 轮仍不收敛 → throw（D12：不返不准的结果）。
+  - **踩到的坑（S2a 教训复用）**：第一次注入（只扫一轮）时用例直接 **SIGABRT** —— `eigen.cpp` 主函数
+    没包 try，实现抛出的 `runtime_error` 把整个进程 terminate 掉，一条判据都看不到。
+    已加 `RunEig()` helper 把异常记成一条 FAIL（B/C 批量段），之后注入才表现为 16 条 FAIL 计数。
+    **又一次印证：判据函数与批量循环必须包 try。**
+  - **验收**：`eigen` **119 项**全过。V1.3 最差重构 **double 1.78e-15 / complex 1.33e-15**（判据 1e-8）；
+    Q 正交/酉 ≤ 1.4e-15；`‖QᴴAQ − Λ‖∞` ≤ 1.1e-15；逐列特征对 `max‖A·q_j − λ_j·q_j‖∞` ≤ 1.6e-15；
+    迹不变 `|Σλ − tr(A)|` ≤ 2.2e-16（与特征值取值无关，是独立校验）。
+    含 2×2 闭式对拍（(5±√5)/2、2±√2）、已对角/单位阵/零矩阵/1×1、非对称与非方阵 throw。
+  - **注入反例**：
+    ① **只扫一轮** → **16 条 FAIL**，分布极有说明力：**n=2 全过、n ≥ 3 全中** ——
+    2×2 只有一对非对角元，一次旋转就彻底清零；从 3×3 起，旋转 (0,1) 会在 (0,2)/(1,2) 上
+    **重新灌入非零**（fill-in），所以必须一轮轮扫。这直接回答了"为什么会完"的疑问。
+    ② **漏 `conj`**（`s·conj(ph)` → `s·ph`）→ **24 条 FAIL 全落在 complex、实对称 0 条**，
+    且连 `‖QᴴQ − I‖∞` 都坏到 7.4e-3（漏 conj 破坏了 U 的酉性）——
+    与 S2a 那次漏 conj 注入（23 条全在 complex）完全同构。
+    两次注入恢复后复跑 5/5 → 6/6，`grep 注入` 无残留。
+  - **提交**：S3 单独一刀（2026-10-14，未 push）。
 
 ### 2026-10-13
 

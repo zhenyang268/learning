@@ -361,10 +361,30 @@
       ‖X_chol − X_lu‖∞ < 1e-8 且各自残差 < 1e-10，重构 ‖L·Lᴴ − A‖∞ < 1e-8，实/复共用同一份源码。
       **注入反例**：两处漏 `conj` → **23 条 FAIL 全在 complex，double 毫发无损**（印证"实数是这个
       bug 的盲区"）；去掉正定性判据 → 7 条 FAIL 全在异常/SPD 判据。
-      **待办 —— S2a-2**：打开 `Classify` 的 SPD 档，接上 `cholesky_inverse` 与
-      `is_positive_definite`（`inverse.hpp` 三处当前仍显式 throw）
-    - S3 `eigen.hpp` 重写为**真 Jacobi 迭代**（现为 2×2 单次旋转）+ `demo/linalg/eigen.cpp`
-      → **V1.3**
+    - **S2a-2 `inverse.hpp` SPD 档** —— ✅ 已完成（2026-10-14）：`is_positive_definite` 改走
+      "cholesky 不选主元走通即真"（只吃 `runtime_error`，别的异常照常外传；非方阵直接答否）；
+      `cholesky_inverse` 走 `cholesky_solve(A, I)`（前代 + 回代，复用已验收的分解路径，
+      不另写一遍三角求逆）；`Classify` 的 SPD 档**嵌在 `is_symmetric` 分支内部** ——
+      平铺成同级 if 会让它永远不可达（SPD ⊂ Symmetric，会被上一行先 return 掉）。
+      验收：`inverse` 用例 48 → **78 项**（新增 G 段 30 项）全过；V1.2 硬指标最差
+      double 1.18e-13 / complex 9.16e-16 不变；随机 SPD(n=2..6) 与 LU 路径逐元差 ≤ 1.11e-16，
+      自动探测入口与 hint 结果一致。**注入反例**：① Classify 平铺（制造顺序陷阱）→ **8 条 FAIL**
+      （全为 SPD 判据）；② 正定判据恒 true → **5 条 FAIL**（全在非正定一侧）。
+    - **S3 `eigen.hpp`** 重写为**真 Jacobi 迭代**（原为 2×2 单次旋转）+ `demo/linalg/eigen.cpp`
+      → **V1.3** —— ✅ 已完成（2026-10-14）：cyclic Jacobi，一轮轮扫全部 i<j，直到
+      off(A)² = Σ_{i≠j}|A(i,j)|² <= tol²（tol = 8n·eps·‖A‖_F；酉相似保 Frobenius 范数，标尺只算一次）；
+      每步只更新第 p、q 两行两列（O(n)，不是整体旋转的 O(n³)）；Hermitian 用酉阵
+      U = [[c, -s·ph], [s·conj(ph), c]]（ph = z/|z| —— 复数域比实对称只多这一个相位，
+      实对称下 ph = ±1 退化成普通实旋转）；对角元走解析式 (a+b)/2 ± hypot(a−b, 2|z|)/2，
+      与 θ = 0.5·atan2(2|z|, a−b) 严格配套（取 θ+π/2 也能消零但会对调特征值）；
+      100 轮不收敛则 throw（D12，不返不准的结果）。删掉 `rotate()` 整体旋转与硬编码 double 的
+      `jacobi()`；`eig(A)` 补 tol 实参、非对称改显式 throw（原先调不存在的 `eig_general`）。
+      验收：新增 ctest **`eigen`**（`demo/linalg/eigen.cpp`，119 项）—— V1.3 硬指标最差重构
+      **double 1.78e-15 / complex 1.33e-15**（判据 1e-8）；Q 正交/酉 ≤ 1.4e-15；对角化 ≤ 1.1e-15；
+      逐列特征对 ‖A·q_j − λ_j·q_j‖∞ ≤ 1.6e-15；迹不变 |Σλ − tr(A)| ≤ 2.2e-16。
+      **注入反例**：① 只扫一轮 → **16 条 FAIL**（**n=2 免疫、n ≥ 3 全中** —— 正是"必须循环"
+      的硬证据：2×2 只有一对非对角元，一次旋转就彻底清零）；② 漏 `conj` → **24 条 FAIL
+      全在 complex、实对称 0 条**，连 Q 的酉性都一起坏（漏 conj 直接破坏 U 的酉性）。
     - S4 `svd.hpp`（经 A^H·A 特征分解组装）+ `demo/linalg/svd.cpp` → **V1.4**
     - S5 `expm.hpp`（0 字节 → 落地）+ `demo/linalg/expm.cpp` → **V1.6**（so(3) 对易）
     - S6 `operator.hpp` / `qr.hpp` / `householder.hpp` 派支线处置决定 + `demo/linalg/smoke.cpp`

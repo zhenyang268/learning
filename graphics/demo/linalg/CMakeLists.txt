@@ -17,3 +17,9 @@ target_include_directories(cholesky PRIVATE
     ${GRAPHICS_SRC_DIR}
 )
 add_test(NAME cholesky COMMAND cholesky)
+
+add_executable(eigen eigen.cpp)
+target_include_directories(eigen PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME eigen COMMAND eigen)
