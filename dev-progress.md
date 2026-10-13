@@ -162,6 +162,9 @@
       ⑤ 实现 `svd.hpp`（经 A^H·A 特征分解）；⑥ 补 `expm`（V1.6 需要）；
       ⑦ 建 5 个验收 demo（V1.1+V1.2 / V1.3 / V1.4 / V1.5 / V1.6+V1.7）并注册 ctest；
       ⑧ 加一个「linalg 编译烟测」用例（只 include + 实例化各入口），防止"文件在、编译器从没跑过"复发。
+      **进度更新（2026-10-14）**：`cholesky.hpp` **分解侧已完成**（S2a，见 §6 同日条，ctest 5/5、
+      `cholesky` 98/98、V2.2 通过）。④ 之前先插一步 **S2a-2**：打开 `Classify` 的 SPD 档 +
+      接上 `cholesky_inverse` / `is_positive_definite`（`inverse.hpp` 三处当前仍显式 throw）。
 - [x] ~~检查 `Solve` 落盘版细节（消元循环里 `if (max_row != i)` 可疑）~~
       → **2026-10-14 探针证实"可疑"为真**：该 `if` 会整段跳过消元，且消元公式本身用错了行
       （`U(i,k)` 应为 `U(j,k)`）。详见 §3 的 linalg 小节。
@@ -254,6 +257,40 @@
     "up-to-date" 而不重建，跑出的仍是注入版二进制（我一度误读为"恢复后仍 1 FAIL"）——
     恢复后必须 `touch <源文件>` 或删构建产物再跑。
   - 新增 **S2a**（`cholesky.hpp` 修复 + 打开 SPD 档）已登记进 `graphics/plan.md` 的 S 清单。
+
+- **S2a `cholesky.hpp` 分解侧完成**（工程线，代码改动；`ctest` **5/5**，`cholesky` 用例 **98/98**）。
+  用户定的是**方案甲**：删递归版、只留元素公式版，先把 V2.2 拿到手（递归分块版用户后续自行补）。
+  - **结构性整理（本刀前置，单独构建验证无回归）**：
+    ① `ScalarTraits<T>::real(const T&) -> real_t` 新增：float/double 恒等、`Complex<T>` 递归取
+    `.real`、`Dual<T>` 只看 `value`（与 `abs2` 同口径），concept 同步加一条契约 —— 于是
+    `Complex<Dual<double>>` / `Dual<Complex<double>>` 这类嵌套也成立（探针 6/6 实测）。
+    ② `DefaultTol<T>(n)` 从 `linalg/solve.hpp` 上移到 `core/scalar.hpp` 标量层：它是 D12 的容差策略，
+    solve / inverse / cholesky / eigen / svd 共用，不该让 cholesky 为了拿一个容差去 include LU。
+  - **修掉的问题**（编译层 6 类 + 数学层 2 处）：
+    `-=` / `/=`（Complex/Dual 无复合赋值，D7）；**两处 `L(·,·)*L(·,·)` 漏 `conj`**（实数下免费、
+    复数下必错）；`L(i,i) <= 0`（复数无 `<=`，改走新加 `real`，且写成 `!(real(d) > tol)` 让 NaN 也落 throw）；
+    `sqrt` 未限定命名空间（两步法 —— Complex/Dual 的 sqrt 是类内 friend，ADL 可见）；
+    返回 `Matrix<T>()` 当错误码 → 改 throw（D12）；删半成品 `cholesky_r` / `cholesky_recursive`
+    （后者自己写着 TODO「只处理了对角线」，且被定义在它之后）。
+  - **新增** `cholesky_solve`（前代 + 回代；V2.2 要求「解同一方程组」）。
+  - **验收**：新增 ctest `cholesky`（`demo/linalg/cholesky.cpp`，98 项）。实测最差重构
+    **double 1.78e-15 / complex 1.78e-15**，解之差 **double 5.55e-17 / complex 2.78e-17**；
+    double n=2..6×4 seed、Complex n=2..4×3 seed **共用同一份源码**。含手算 2×2 / 3×3 / Hermitian 2×2、
+    结构判据（严格上三角精确 0；对角元为正实数）、秩亏边界（A = M·Mᵀ，M 3×2 —— 最后一个主元才塌）、
+    接口契约（只读下三角）、SPD 判据语义。
+  - **注入反例**：① 两处漏 `conj` → **23 条 FAIL，全部落在 complex 组；double 重构仍是 1.78e-15
+    毫发无损** —— 直接印证「实数测试是这个 bug 的盲区」；② 去掉正定性判据 → 7 条 FAIL 全在
+    异常 / SPD 判据上；③ 消元那步除法写成乘法 → 71 条 FAIL（并在 E 段之后 abort，因为 E 段没包 try）。
+  - **两个新踩的坑（都记下）**：
+    ① **clang 默认 `-ffp-contract=fast` 会把 `a - b*c` 融成 FMA**，于是「虚部」判据若写成
+    `abs2(d) - re*re`，算出来的是 `fl(d²) − d²`（即 d² 的舍入残渣 ~1e-16），在 double 上恒大于 `tol²`
+    —— 实测加 `-ffp-contract=off` 后残渣精确为 0，坐实成因。正确写法是 `abs2(d - fromReal(re))`
+    （减法精确抵消，不受 contract 影响；复数下正好是 `Im(d)²`）。**这是判据写法的坑，不是实现的错**。
+    ② 判据函数不包 try 的话，实现一旦抛异常会让**整个用例 abort**，其余判据一条都跑不到 ——
+    已给 `CheckReconstruct` / `CheckAgainstLU` 加 try，并把异常记成一条 FAIL。
+  - **未动**：`inverse.hpp` —— SPD 档的打开、`cholesky_inverse` / `is_positive_definite` 的接入
+    留作 **S2a-2**（当前三处仍显式 throw），按「一刀一文件」纪律分开做。
+  - **提交**：S2a 由用户放行后单独一刀（2026-10-14，未 push）。
 
 ### 2026-10-13
 

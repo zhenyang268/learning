@@ -11,3 +11,9 @@ target_include_directories(inverse PRIVATE
     ${GRAPHICS_SRC_DIR}
 )
 add_test(NAME inverse COMMAND inverse)
+
+add_executable(cholesky cholesky.cpp)
+target_include_directories(cholesky PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME cholesky COMMAND cholesky)

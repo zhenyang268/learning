@@ -350,10 +350,19 @@
     - **S2 `inverse.hpp`**（补 `Inverse` 分发 + 修 `scalarTraits`/`Identity<T>`/`tol`/`Cholesky`）
       + `demo/linalg/inverse.cpp` → **V1.2 硬验收** —— ✅ 已完成（2026-10-14）
       （SPD / QR 分支本刀显式 throw，待 S2a / S6 接入）
-    - **S2a `cholesky.hpp`**（2026-10-14 新增）：修 `L(i,j) -=`/`L(i,j) /=`（Complex/Dual 无复合
-      赋值，D7）、`L(i,i) -= L(i,j)*L(i,j)` 漏 `conj`、`if (L(i,i) <= 0)`（复数无 `<=`）、
-      `sqrt` 未限定命名空间、`cholesky_r` 调用了定义在它之后的 `cholesky_recursive`；
-      然后打开 `Classify` 的 SPD 档，接上 `cholesky_inverse` 与 `is_positive_definite`
+    - **S2a `cholesky.hpp` 分解侧** —— ✅ 已完成（2026-10-14，**方案甲**：删递归版、只留元素公式版）：
+      修 `L(i,j) -=`/`L(i,j) /=`（Complex/Dual 无复合赋值，D7）、**两处 `L(·,·)*L(·,·)` 漏 `conj`**、
+      `L(i,i) <= 0`（复数无 `<=`，改走新加 `ScalarTraits<T>::real`）、`sqrt` 未限定命名空间、
+      错误码空矩阵改 throw（D12）；删半成品 `cholesky_r` / `cholesky_recursive`
+      （递归分块版由用户后续自行补）；新增 `cholesky_solve`（V2.2 要"解同一方程组"）。
+      配套结构性整理：`ScalarTraits<T>::real`（4 个特化 + concept 加一条契约）与
+      `DefaultTol<T>(n)` 上移到 `core/scalar.hpp` 标量层（linalg 各文件不再为取一个容差互相 include）。
+      验收：新增 ctest **`cholesky`**（`demo/linalg/cholesky.cpp`，98 项）—— V2.2 硬指标
+      ‖X_chol − X_lu‖∞ < 1e-8 且各自残差 < 1e-10，重构 ‖L·Lᴴ − A‖∞ < 1e-8，实/复共用同一份源码。
+      **注入反例**：两处漏 `conj` → **23 条 FAIL 全在 complex，double 毫发无损**（印证"实数是这个
+      bug 的盲区"）；去掉正定性判据 → 7 条 FAIL 全在异常/SPD 判据。
+      **待办 —— S2a-2**：打开 `Classify` 的 SPD 档，接上 `cholesky_inverse` 与
+      `is_positive_definite`（`inverse.hpp` 三处当前仍显式 throw）
     - S3 `eigen.hpp` 重写为**真 Jacobi 迭代**（现为 2×2 单次旋转）+ `demo/linalg/eigen.cpp`
       → **V1.3**
     - S4 `svd.hpp`（经 A^H·A 特征分解组装）+ `demo/linalg/svd.cpp` → **V1.4**

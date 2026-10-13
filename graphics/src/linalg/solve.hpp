@@ -36,15 +36,8 @@ void SwapMultipliers(Matrix<T> &L, int r1, int r2, int upto)
     }
 }
 
-// 容差: eps 的倍数, 且随矩阵规模缩放 —— D12(主元 |p| < tol 显式抛) / §10.8 ①(不写魔数 1e-9)。
-// 不能用全局 Tol: 那是 float 的 epsilon(1.19e-7), 对 Matrix<double>(2.2e-16) 差 9 个数量级,
-// 会按错误尺度判奇异性(§2.4: 容差不随离散尺度缩放 -> 把良定矩阵误判成奇异)。
-template <CommutativeScalar T>
-typename ScalarTraits<T>::real_t DefaultTol(int n)
-{
-    using real_t = typename ScalarTraits<T>::real_t;
-    return real_t(8) * real_t(n) * std::numeric_limits<real_t>::epsilon();
-}
+// DefaultTol<T>(n) 已上移到 core/scalar.hpp 标量层 (2026-10-14, S2a):
+// 它是 D12 的容差策略, solve / inverse / cholesky / eigen / svd 共用。
 
 // piv记录换行, 本质上就是在说, 怎么重排A使得PA可以无痛分解成LU, 当然B也得重排
 // eg 1 / 1e-20 = 1e20数据爆炸, 没办法用, 必须用小数
