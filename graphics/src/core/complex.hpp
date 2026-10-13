@@ -97,7 +97,7 @@ public:
     {
         using std::log;
         using std::atan2;
-        return Complex(ScalarTraits<T>::const_n(T(0.5)) * log(z.real * z.real + z.imag * z.imag), atan2(z.imag, z.real));
+        return Complex(ScalarTraits<T>::fromReal(0.5) * log(z.real * z.real + z.imag * z.imag), atan2(z.imag, z.real));
     }
 
     friend Complex pow(const Complex& z, const Complex& w)

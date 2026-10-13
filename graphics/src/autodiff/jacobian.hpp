@@ -45,8 +45,10 @@ Matrix<T> Apply(const Matrix<T>& A, const Matrix<FunctionType>& f)
 }
 
 // 把 value 赋值为 derive, 用于 backward (Function 节点: 局部导数暂存 derive)
+// 按值收参并返回: 调用点写的是 Derive(Apply(...)), 原先收 Matrix<T>& 接不了临时量
+// (Backward 一实例化就报 no matching function for call to 'Derive')
 template <typename T>
-Matrix<T>& Derive(Matrix<T>& A)
+Matrix<T> Derive(Matrix<T> A)
 {
     for (int i = 0; i < A.Size(); i++) {
         A.Data()[i].value = A.Data()[i].derive;

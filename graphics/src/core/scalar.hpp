@@ -27,7 +27,9 @@ concept Scalar = std::semiregular<T> && requires (T a, T b) {
     { ScalarTraits<T>::one() } -> std::same_as<T>;
     { ScalarTraits<T>::conj(std::declval<T>()) } -> std::same_as<T>;
     { ScalarTraits<T>::abs2(std::declval<T>()) } -> std::same_as<typename ScalarTraits<T>::real_t>;
-    { ScalarTraits<T>::const_n(std::declval<T>()) } -> std::same_as<T>;
+    // 任意实数常数的唯一入口(0/1 走 zero/one 快路); matrix.md 7.1 第 2 条。
+    // 写进 concept 是为了堵住"泛型代码裸写字面量"这个最隐蔽的实数假设。
+    { ScalarTraits<T>::fromReal(std::declval<typename ScalarTraits<T>::real_t>()) } -> std::same_as<T>;
 };
 
 template <>
@@ -41,7 +43,7 @@ struct ScalarTraits<float> {
     static real_t conj(real_t x) { return x; }
     static real_t abs2(real_t x) { return x * x; }
 
-    static real_t const_n(real_t x) { return x; }
+    static real_t fromReal(real_t x) { return x; }   // float/double: 恒等折算
 };
 
 template <>
@@ -55,7 +57,7 @@ struct ScalarTraits<double> {
     static real_t conj(real_t x) { return x; }
     static real_t abs2(real_t x) { return x * x; }
 
-    static real_t const_n(real_t x) { return x; }
+    static real_t fromReal(real_t x) { return x; }   // float/double: 恒等折算
 };
 
 template <typename T> requires Scalar<T>
@@ -69,7 +71,11 @@ struct ScalarTraits<Complex<T>> {
     static Complex<T> conj(const Complex<T>& x) { return Complex<T>(x.real, -x.imag); }
     static real_t abs2(const Complex<T>& x) { return x.real * x.real + x.imag * x.imag; }
 
-    static Complex<T> const_n(const T& x) { return Complex<T>(x, ScalarTraits<T>::zero()); }
+    // 复数常量: 虚部折算为 0 (D15 的 traits 化)
+    static Complex<T> fromReal(real_t x)
+    {
+        return Complex<T>(ScalarTraits<T>::fromReal(x), ScalarTraits<T>::zero());
+    }
 };
 
 template <typename T> requires Scalar<T>
@@ -80,11 +86,18 @@ struct ScalarTraits<Dual<T>> {
     static Dual<T> zero() { return Dual<T>(ScalarTraits<T>::zero(), ScalarTraits<T>::zero()); }
     static Dual<T> one() { return Dual<T>(ScalarTraits<T>::one(), ScalarTraits<T>::zero()); }
 
-    static Dual<T> conj(const Dual<T>& x) { return Dual<T>(ScalarTraits<T>::conj(x.real),
-                                                        ScalarTraits<T>::conj(x.dual)); }
-    static real_t abs2(const Dual<T>& x) { return ScalarTraits<T>::abs2(x.real); }
+    // conj 逐分量转发基域共轭: conj(Dual) = Dual(conj(value), conj(derive))
+    // (epsilon 共轭是坑 —— 逐分量对、只 conj(epsilon) 错, matrix.md 7.1 第 6 条)
+    static Dual<T> conj(const Dual<T>& x) { return Dual<T>(ScalarTraits<T>::conj(x.value),
+                                                        ScalarTraits<T>::conj(x.derive)); }
+    // abs2 只看 value: 比较/选主元只在实数域发生, 不带 epsilon 分量
+    static real_t abs2(const Dual<T>& x) { return ScalarTraits<T>::abs2(x.value); }
 
-    static Dual<T> const_n(const T& x) { return Dual<T>(x, ScalarTraits<T>::zero()); }
+    // 常数种子: value = 该实数, derive = 0
+    static Dual<T> fromReal(real_t x)
+    {
+        return Dual<T>(ScalarTraits<T>::fromReal(x), ScalarTraits<T>::zero());
+    }
 };
 
 // 细化 concept：在 requires 里查这个 flag。

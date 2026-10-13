@@ -46,12 +46,11 @@ public:
         return Dual(v, d);
     }
 
-    Dual& operator=(Dual dual)
-    {
-        value = dual.value;
-        derive = dual.derive;
-        return *this;
-    }
+    // 拷贝赋值不手写 —— 原 operator= 与隐式版本逐字段等价, 却触发了 -Wdeprecated-copy:
+    // 触发条件是"有 user-provided 拷贝赋值 + 没有 user-declared 拷贝构造",
+    // 把参数从按值改成 const& 并不解除(实测)。交给编译器合成即可,
+    // 拷贝构造/拷贝赋值/移动构造/移动赋值全都在, 且 `d = 0.5f` 仍经非 explicit
+    // 构造转成临时 Dual 后走拷贝赋值。
 
     // 数学函数
     // 常数用于函数矩阵拓展
@@ -101,7 +100,7 @@ public:
     {
         using std::sqrt;
         T v = sqrt(x.value);
-        return Dual(v, x.derive * ScalarTraits<T>::const_n(0.5) / v);
+        return Dual(v, x.derive * ScalarTraits<T>::fromReal(0.5) / v);
     }
 
     friend Dual sumLine(const std::vector<Dual>& arr)

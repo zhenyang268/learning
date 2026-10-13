@@ -31,6 +31,26 @@ using std::pair;
 using std::string;
 using std::vector;
 
+// 二元算子表: 与 GradNode::Forward 的 switch 一一对应 (四则 + 逐元素幂 + 矩阵乘)。
+// 节点 arity 由 inputs.size() 运行时携带(matrix.md 7.5 第 6 条), 缺输入时
+// node1/node2 是 nullptr —— 靠这张表在 Forward 入口先拦住, 不然解引用就是段错误。
+inline bool IsBinaryOp(GradOp op)
+{
+    switch (op)
+    {
+        case GradOp::Add:
+        case GradOp::Sub:
+        case GradOp::Mult:
+        case GradOp::CWiseMult:
+        case GradOp::CWisePow:
+        case GradOp::Divide:
+        case GradOp::MatrixMult:
+            return true;
+        default:
+            return false;
+    }
+}
+
 /* 使用行向量+分母布局, ∂z/∂x = ∂z/∂y x ∂y/∂x = W2 * W1
 // 假设：Y = X * W，其中 X ∈ R^{1×n}, W ∈ R^{n×m}, Y ∈ R^{1×m}
 // 向量 y 对向量 x 的导数是一个矩阵（雅可比矩阵）, 这里直接就是 W
@@ -88,6 +108,19 @@ public:
 
     void Forward()
     {
+        // arity 校验放在最前: 缺输入时下面拿到的是 nullptr, 不拦就是段错误(无从定位)
+        if (IsBinaryOp(op)) {
+            if (inputs.size() != 2)
+                throw std::invalid_argument(
+                    "GradNode::Forward: 二元算子需要 2 个输入, 实际 " +
+                    std::to_string(inputs.size()));
+        } else if (op != GradOp::Input && op != GradOp::Constant) {
+            if (inputs.size() != 1)
+                throw std::invalid_argument(
+                    "GradNode::Forward: 一元/透传算子需要 1 个输入, 实际 " +
+                    std::to_string(inputs.size()));
+        }
+
         std::shared_ptr<GradNode<T>> node1 = nullptr, node2 = nullptr;
         if (inputs.size() == 2) {
             node1 = inputs[0];
@@ -97,80 +130,102 @@ public:
         }
         switch (op) {
             // 输入节点value, derive以及要求的xi都由外部提前设置好
-            case Input: 
-                break;
-            
-            case CrossEntropy:
+            case GradOp::Input: 
                 break;
 
-            case Add:
+            // 常数/常量矩阵节点: 值由外部预置, 前向不动
+            case GradOp::Constant:
+                break;
+
+            // 输出透传节点: 原样搬运输入矩阵(含 value 与 derive)
+            case GradOp::Output:
+                matrix = node1->matrix;
+                break;
+            
+            // 交叉熵: 未实现
+            case GradOp::CrossEntropy:
+                throw std::logic_error("CrossEntropy: 未实现");
+
+            case GradOp::Add:
                 matrix = std::move(node1->matrix + node2->matrix);
                 break;
-            case Sub:
+            case GradOp::Sub:
                 matrix = std::move(node1->matrix - node2->matrix);
                 break;
-            case CWiseMult:
-            // 逐元素乘法
+            // 逐元素乘法 (Mult 与 CWiseMult 同义: 标量/同形矩阵; 四则内建的乘)
+            case GradOp::Mult:
+            case GradOp::CWiseMult:
                 matrix = std::move(node1->matrix.cwiseProduct(node2->matrix));
                 break;
+
+            // 逐元素幂运算: 未实现(按 matrix.md 7.5 第 6 条应建图拆链 exp(y*ln x))
+            case GradOp::CWisePow:
+                throw std::logic_error("CWisePow: 未实现");
             
             // 矩阵乘法也满足derive的计算规则
             // 但是需要注意node1和node2的顺序, node1入参数行主导
             // node2的derive都是0
-            case MatrixMult:
+            case GradOp::MatrixMult:
                 matrix = std::move(node1->matrix * node2->matrix);
                 break;
-            case Divide:
+            case GradOp::Divide:
                 matrix = std::move(node1->matrix.cwiseDivision(node2->matrix));
                 break;
 
             // transpose也是线性变换
-            case Transpose:
+            case GradOp::Transpose:
                 matrix = std::move(node1->matrix.Transpose());
                 break;
 
             // inverse要通过伴随内积配对来算
             // <a_x, dx> = <a_y, dy>
             // z = f(x) = g(y) (y和x是换元)
-            case Inverse:
+            case GradOp::Inverse:
                 // TODO: 阶段 1 接 linalg::Inverse
                 throw std::logic_error("Inverse: 待 linalg::Inverse 落地 (阶段 1)");
 
-            case Sigmoid:
-                break;
-            case Relu:
-                break;
-            case Tanh:
-                break;
-            case Softmax:
-                break;
+            // 激活函数: 未实现(按 matrix.md 7.5 第 6 条, Sigmoid/Tanh 应拆链,
+            // Relu/Softmax 因数值保留 fused 枚举)
+            case GradOp::Sigmoid:
+                throw std::logic_error("Sigmoid: 未实现");
+            case GradOp::Relu:
+                throw std::logic_error("Relu: 未实现");
+            case GradOp::Tanh:
+                throw std::logic_error("Tanh: 未实现");
+            case GradOp::Softmax:
+                throw std::logic_error("Softmax: 未实现");
             
 
-            case SumAll:
-                matrix = Matrix(1, 1);
+            case GradOp::SumAll:
+                matrix = Matrix<T>(1, 1);
                 matrix[0][0] = SumAll(node1->matrix);
                 break;
-            case MultAll:
-                matrix = Matrix(1, 1);
+            case GradOp::MultAll:
+                matrix = Matrix<T>(1, 1);
                 matrix[0][0] = MultAll(node1->matrix);
                 break;
-            case LnMultAll:
-                break;
+            case GradOp::LnMultAll:
+                throw std::logic_error("LnMultAll: 未实现");
             
             /**
              * n维输入, n维输出, 但是雅可比矩阵是n*n
              * 所以这里每个函数的微分都在矩阵的对角线上, 可以用原n维矩阵存储
              */
-            case Function:
+            case GradOp::Function:
+                if (matrixF.Size() == 0)
+                    throw std::logic_error("Function: matrixF 未设置 (空 0x0), 不能取 matrixF[0][0]");
                 matrix = std::move(Apply(node1->matrix, matrixF[0][0]));
                 break;
-            case MatrixFunction:
+            case GradOp::MatrixFunction:
+                if (matrixF.Size() == 0)
+                    throw std::logic_error("MatrixFunction: matrixF 未设置 (空 0x0)");
                 matrix = std::move(Apply(node1->matrix, matrixF));
                 break;
         }
 
     }
 
+    // 反向模式尚未接入 V1 基线: 本函数只保证可编译, 语义待 tape 立项后再定
     void Backward()
     {
         std::shared_ptr<GradNode<T>> node1 = nullptr, node2 = nullptr;
@@ -186,9 +241,9 @@ public:
          * adjoint只使用value, 不用derive, 加上traits分离太麻烦
          */
         switch (op) {
-            case CrossEntropy:
+            case GradOp::CrossEntropy:
                 break;
-            case Add:
+            case GradOp::Add:
                 adjoint1 = Matrix<T>::Ones(node1->matrix.Rows(),
                                            node1->matrix.Cols());
                 adjoint2 = Matrix<T>::Ones(node2->matrix.Rows(),
@@ -196,7 +251,7 @@ public:
                 node1->adjoint += adjoint1.cwiseProduct(adjoint);
                 node2->adjoint += adjoint2.cwiseProduct(adjoint);
                 break;
-            case Sub:
+            case GradOp::Sub:
                 adjoint1 = Matrix<T>::Ones(node1->matrix.Rows(),
                                            node1->matrix.Cols());
                 adjoint2 = Matrix<T>::Ones(node2->matrix.Rows(),
@@ -205,13 +260,13 @@ public:
                 node1->adjoint += adjoint1.cwiseProduct(adjoint);
                 node2->adjoint += adjoint2.cwiseProduct(adjoint);
                 break;
-            case CWiseMult:
+            case GradOp::CWiseMult:
                 // y = A cwiseproduct X
                 // 逐元素乘法, a_x = a_y cwiseproduct A
                 node1->adjoint += node2->matrix.cwiseProduct(adjoint);
                 node2->adjoint += node1->matrix.cwiseProduct(adjoint);
                 break;
-            case MatrixMult:
+            case GradOp::MatrixMult:
                 // dY = dX * W + x * dW
                 // <a_x, dx> = <a_y, dy> = tr(dy^T * a_y), dW = 0
                 // <J^*  * a_y, dx> = <a_y, dx * J>
@@ -222,7 +277,7 @@ public:
                 node1->adjoint += adjoint * node2->matrix.Transpose();
                 node2->adjoint += node1->matrix.Transpose() * adjoint;
                 break;
-            case Divide:
+            case GradOp::Divide:
                 node1->adjoint += adjoint * node2->matrix.Transpose();
                 adjoint2 = Matrix<T>::Ones(node2->matrix.Rows(),
                                            node2->matrix.Cols())
@@ -231,45 +286,45 @@ public:
                                       .cwiseDivision(node2->matrix)
                                       .cwiseDivision(node2->matrix);
                 break;
-            case Transpose:
+            case GradOp::Transpose:
                 node1->adjoint = node1->matrix.Transpose();
                 break;
 
             // a_x = - Y^T * a_y * Y^T
-            case Inverse:
+            case GradOp::Inverse:
                 adjoint1 = matrix.Transpose() * adjoint * matrix.Transpose();
                 adjoint1 = adjoint1 * (-ScalarTraits<T>::one());
                 node1->adjoint += adjoint1;
                 break;
 
-            case Sigmoid:
+            case GradOp::Sigmoid:
                 break;
-            case Relu:
+            case GradOp::Relu:
                 break;
-            case Tanh:
+            case GradOp::Tanh:
                 break;
-            case Softmax:
+            case GradOp::Softmax:
                 break;            
 
             // a_x = J * a_y, J是全1矩阵
-            case SumAll:
+            case GradOp::SumAll:
                 adjoint1 = Matrix<T>::Ones(node1->matrix.Rows(),
                                            node1->matrix.Cols());
                 node1->adjoint += adjoint1 * adjoint[0][0];
                 break;
 
             // a_x = J * a_y, Jij是除xij的累乘
-            case MultAll:
+            case GradOp::MultAll:
                 adjoint1 = MultAllBackward(node1->matrix);
                 node1->adjoint += adjoint1.cwiseProduct(adjoint);
                 break;
-            case LnMultAll:
+            case GradOp::LnMultAll:
                 break;
             
-            case Function:
+            case GradOp::Function:
                 node1->adjoint += adjoint * Derive(Apply(node1->matrix, matrixF[0][0]));
                 break;
-            case MatrixFunction:
+            case GradOp::MatrixFunction:
                 node1->adjoint += adjoint * Derive(Apply(node1->matrix, matrixF));
                 break;
         }
@@ -344,10 +399,12 @@ public:
 
     void Backward()
     {
-        // 先output最后input
-        for (auto node : backward_list)
-        {
-            node->Backward();
-        }
+        // 反向模式未实现, 这里明确拒绝执行 —— 别"先跑跑看":
+        // 节点的 adjoint 从来没有按形状初始化(默认 0x0), 第一个节点就会抛
+        // Matrix dimension mismatch, 报错信息还会把人误导到 Matrix 上去(实测复现)。
+        // 按 matrix.md 7.5, 反向模式要另起 tape 设计(立项条件: 叶子多 + 要全梯度 +
+        // 标量链), 本基线只覆盖 forward-mode。GradNode::Backward 是那之前的草稿, 未验证。
+        // backward_list(拓扑逆序)的构造保留, 供将来 tape 版复用。
+        throw std::logic_error("ComputationGraph::Backward: 反向模式未实现 (见 matrix.md 7.5)");
     }
 };

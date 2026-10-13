@@ -288,11 +288,30 @@
 
 ## 待办 / 已知问题（只追加，不删除）
 
-- [ ] `graphics/CMakeLists.txt` 仍是 C++17，未升 C++20（阶段 1 任务 0）。
+- [x] `graphics/CMakeLists.txt` 仍是 C++17，未升 C++20（阶段 1 任务 0）。
+      → **2026-10-13 核实：已升**（`set(CMAKE_CXX_STANDARD 20)` + `CXX_STANDARD_REQUIRED ON`），本条作废。
 - [ ] `src/core/perspective.hpp`、`rotate.hpp` 为旧接口，阶段 1 重写 matrix 时一并处置。
-- [ ] `demo/autodiff/compute_graph.cpp` 依赖旧 Matrix friend 接口，矩阵重写后需适配。
+- [x] `demo/autodiff/compute_graph.cpp` 依赖旧 Matrix friend 接口，矩阵重写后需适配。
+      → **2026-10-13 完成**：真实待适配的不是 friend 接口，而是① `GradOp` 转 `enum class` 后
+      `grad_graph.hpp` 的 35 处 `case` 标签缺作用域前缀；② 类内 CTAD `Matrix(1,1)` 须写 `Matrix<T>(1,1)`；
+      ③ 缺 `Output`/`Mult` 分支（编过也输出恒 0）。`ctest --test-dir graphics/build` 1/1 通过。
 - [x] 仓库根目录的 `requirements`（无扩展名，内容为 pip 源说明）**已于 2026-09-22 删除** ——
   它与 `pyproject.toml` + `uv.lock` 重复，且会误导 agent 走 pip 路径。依赖一律以 uv 为准。
+- [x] **标量契约与设计文档漂移**（2026-10-13 修）：`scalar.hpp` 里写的是文档中不存在的
+      `const_n(内层 T)`，而 §7.1 第 2 条要的是 `fromReal(real_t)` —— 后果是
+      `Scalar<Complex<double>>` / `Scalar<Dual<float>>` 双双不成立，任何
+      `requires CommutativeScalar<T>` 的 linalg 函数都拒绝它们（**V1.1 的直接拦路石**）。
+      已改名并按设计补进 concept；`ScalarTraits<Dual<T>>::conj/abs2` 的成员名
+      （`x.real`/`x.dual` → `x.value`/`x.derive`）一并修；`jacobian.hpp` 的 `Derive`
+      改为按值收参（原先接不了 `Apply(...)` 的临时量）。
+      新增 ctest 用例 **`scalar_traits`**（`demo/core/`）：静态断言钉契约 + 交换律单测
+      + Complex/Dual 原函数对拍，44 项检查。<br>→ 注意：**这不等于 V1.1 通过**，
+      V1.1 还要求 linalg（inverse/eigen/svd）真的落地并跑出残差。
+- [ ] **反向模式（`ComputationGraph::Backward` / `GradNode::Backward`）已明确标记未实现**
+      （2026-10-13 改为抛 `logic_error`）：实测节点 adjoint 从未按形状初始化，
+      第一个节点就抛 `Matrix dimension mismatch`，会把排查引到 Matrix 上。
+      按 `matrix.md` §7.5，反向模式要另起 tape 设计（先设计后动码），
+      `GradNode::Backward` 是那之前的草稿、未验证 —— 本题**不是 bug，是待立项功能**。
 - [x] `notebook/` 文件名两处拼写问题**已于 2026-09-22 修正**：
   `B_algbra.tex` → `B_algebra.tex`、`M_addtion.tex` → `M_addition.tex`（`main.tex` 的 `\input` 已同步）。
 - [ ] `§NN.N` 是编译后全局编号，**插入新 `.tex` 就会整体位移** —— 文档引用优先用文件内编号（`B1`、`G1.1`）。

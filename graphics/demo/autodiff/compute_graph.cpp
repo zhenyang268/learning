@@ -8,7 +8,10 @@
 //
 // 每个用例同时用「解析梯度」和「有限差分(数值梯度)」交叉验证。
 //
-// 编译:  g++ -std=c++17 -I ../../src compute_graph.cpp -o compute_graph
+// 编译与运行(由 CMake 注册为 ctest 用例, 不得直接 g++ 单编):
+//   cmake -S graphics -B graphics/build -DCMAKE_BUILD_TYPE=Debug
+//   cmake --build graphics/build -j
+//   ctest --test-dir graphics/build --output-on-failure
 //
 // forward-mode 求梯度的约定:
 //   Input 节点是叶子, Forward() 不会覆盖其 derive 字段, 由测试预先设置 seed:
@@ -85,8 +88,11 @@ void check(const char* name, float got, float want, float eps = 1e-3f)
 }
 
 // 有限差分: 扰动 leaf 的第 leaf_col 列, 读取输出第 out_col 列, 得到数值梯度
+// h 取 1e-2: 本文件的四个用例对每个被扰动变量都是线性的(bilinear/仿射), 中央差分
+// 截断误差恒为 0, 只剩浮点舍入 ~ eps*|y|/h; float 的 eps=1.19e-7、|y|~30,
+// h=1e-3 时舍入误差可达 3.7e-3 —— 会假报 FAIL(h=1e-3 实测 1.9989 vs 2.0)。
 float numeric_grad(Graph& g, NodePtr leaf, int leaf_col = 0, int out_col = 0,
-                   float h = 1e-3f)
+                   float h = 1e-2f)
 {
     float x0 = leaf->matrix[0][leaf_col].value;
     leaf->matrix[0][leaf_col].value = x0 + h;  g.Forward();
@@ -258,8 +264,11 @@ void test_sumall()
     auto x1 = leaf_row(GradOp::Input, {2.0f, 3.0f});
     auto x2 = leaf_row(GradOp::Input, {5.0f, 7.0f});
     auto mul = binop(GradOp::Mult, x1, x2);          // (10, 21)
+    // 约简节点输出恒为 1x1: 建图期就得给对形状。原先给的是 1x2(照抄 binop 的写法),
+    // 于是下游 out() 按 1x2 建节点, 直到 forward 才被改成 1x1 —— 现在靠 Output 直接
+    // 覆盖 matrix 没露馅, 但换成 y = sum(a)*2 这种就会在 cwiseProduct 抛尺寸不匹配。
     auto sum = std::make_shared<Node>(GradOp::SumAll,
-                                      Matrix<D>(1, 2, std::vector<D>(2)));
+                                      Matrix<D>(1, 1, std::vector<D>(1)));
     sum->FillInput(mul);
     auto outn = out(sum);
     Graph g(x1, outn);

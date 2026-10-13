@@ -1,6 +1,6 @@
 # dev-progress.md — 进度与排期
 
-> **读者**：人 + agent ｜ **最后更新**：2026-09-22 ｜ **本文是「进度」的唯一真源**
+> **读者**：人 + agent ｜ **最后更新**：2026-10-13 ｜ **本文是「进度」的唯一真源**
 >
 > **真源声明**
 > - 本文是**总纲式进度真源**：回答「整体现在在哪、下一步做什么」。
@@ -15,12 +15,12 @@
 
 ## 0. 当前指针（每次会话先看这里）
 
-> **数学线在 L1（测度与积分）中段；工程线停在 `graphics` 阶段 1 的起点，尚未开工。**
+> **数学线在 L1（测度与积分）中段；工程线在 `graphics` 阶段 1 中段，实际代码比 2026-09-29 日志领先（见第 3 节）。**
 
 | 线 | 当前位置 | 下一个动作 |
 |---|---|---|
 | **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
-| **工程** | `graphics` 阶段 1 未动：matrix 未做实数/复数 scalar trait 改造，无 `linalg`，CMake 仍是 C++17 | CMake 升 C++20；`core/scalar.hpp` + `core/matrix.hpp` 重写 |
+| **工程** | `graphics` 阶段 1 中段：C++20 ✔、scalar/complex/matrix 重写 ✔、dual 修 ✔、LU+Solve ✔；**2026-10-13：`compute_graph` 基线成立（forward-mode）+ 接口层 bug 修完（标量契约 `fromReal`、Dual/Complex 路径、反向模式标记），ctest 2/2 全绿**；`inverse/eigen/svd` 未落地，V1.x 验收仍未跑 | ① 补 `Solve` 收尾 ② 写 V1.2 验收 demo ③ inverse/eigen/svd |
 | **小项目** | 未解锁 | 等 Gate A（见第 2 节） |
 | **笔记 web 化** | `learning-web` 已落**规约 + 设计 + 目录骨架**（`AGENTS.md` / `DESIGN.md` / `build/` / `graph/`），实现未开工 | 按 `learning-web/AGENTS.md` §12 第 1 步：`uv add --dev pypandoc-binary` |
 
@@ -54,11 +54,53 @@
 
 ---
 
-## 3. 现状明细（截至 2026-09-21）
+## 3. 现状明细（截至 2026-10-13）
 
-- **数学线**：**只以 `learning-todo/ns-progress.md` 为准**，本文不重复关卡明细
-  （原此处复述的「已过…差…」清单已于 2026-09-23 删除，避免与 `ns-progress.md` 两处漂移）。
-- **工程线**：`graphics` 阶段 1 未动 —— matrix 未做实数/复数 scalar trait 改造；无 `linalg`；CMake 仍 C++17。
+- **数学线**：**只以 `learning-todo/ns-progress.md` 为准**，本文不重复关卡明细。
+- **工程线**（2026-10-13 实地盘点，代码在分支 `graphics_0`）：
+  - 已落地（编译层验证过）：CMake C++20 ✔（`set(CMAKE_CXX_STANDARD 20)`）；
+    `core/scalar.hpp`（Scalar concept + traits）✔；`core/complex.hpp`（130 行）✔；
+    `core/matrix.hpp` 重写 ✔（静态工厂 Zero/Ones/Identity/Diagonal、扁平行主序、无缓存层）；
+    `autodiff/dual.hpp` 修 ✔（multLine 零因子 bug 已按 matrix.md §7.1 修为前后缀积、
+    operator/ 除零分支已删、`using std::` ADL 两步法已用）；`linalg/solve.hpp` LU+Solve ✔（98 行）。
+  - **原卡点已解（2026-10-13 会话）**：`demo/autodiff/compute_graph.cpp` 编译不过，
+    **真实根因不是「`LnMultAll`/`Function` 未声明」** —— 这两个名字是 `GradOp` 的合法枚举值
+    （`common.hpp`）。实际是三类问题：① `GradOp` 改成 `enum class` 后 `grad_graph.hpp` 的
+    `case X:` 标签没加作用域前缀（35 处，连带 `SumAll`/`MultAll` 撞上 `jacobian.hpp` 同名函数，
+    报成 `<overloaded function type> is not convertible to GradOp`）；② 类内 `Matrix(1, 1)`
+    的 CTAD 失败（2 处，须写 `Matrix<T>(1, 1)`）；③ `Output`（透传）与 `Mult`（逐元素乘）
+    两个分支缺失 —— 这类**能编译但静默出零**的问题比编译错误更危险。
+    已全部修复，`ctest` 1/1 通过。
+  - **基线边界（仍存在，见第二批修复说明）**：未实现算子（`CWisePow`/`LnMultAll`/
+    `CrossEntropy`/`Sigmoid`/`Relu`/`Tanh`/`Softmax`）在 `Forward` 里统一 **throw「未实现」**
+    （原来是静默 `break`，会返回零值）；反向模式整体未实现。
+  - 空壳文件：`linalg/dot.hpp`、`operator.hpp`、`svd.hpp`、`autodiff/lexer.hpp`（均 0 字节）；
+    `eigen.hpp` 只有 38 行声明（Jacobi 未实现）；`inverse.hpp` 有 is_* 探测函数但
+    `Inverse()` 本体未写、且引用未定义的 `Cholesky(A)`、`scalarTraits<T>` 拼写错误。
+  - **第二批修复（2026-10-13 同会话，基线的"接口层 bug"）**：把第一批列出的"已知边界"里
+    属于**真 bug** 的三条改掉 ——
+    ① `scalar.hpp` 的标量契约漂移：代码写的是设计文档里不存在的 `const_n(内层 T)`，
+      而 §7.1 第 2 条要的是 `const_n → fromReal(real_t)`；后果是 `Scalar<Complex<double>>`
+      与 `Scalar<Dual<float>>` **双双不成立**（`static_assert` 实测），任何
+      `requires CommutativeScalar<T>` 的 linalg 函数都拒绝它们 —— **这是 V1.1 与 V1.5 的拦路石**。
+      已按设计改名 + 补进 concept（顺带堵住"泛型代码裸写字面量"这个被 §7.1 点名的隐蔽假设）；
+      连带修 `ScalarTraits<Dual<T>>::conj/abs2` 的成员名（`x.real`/`x.dual` → `x.value`/`x.derive`）；
+    ② `jacobian.hpp` 的 `Derive(Matrix<T>&)` 接不了 `Apply(...)` 的临时量 → 改按值收参返回；
+    ③ `dual.hpp` 手写的 `operator=` 触发 `-Wdeprecated-copy`（**触发条件是"有 user-provided
+      拷贝赋值 + 无 user-declared 拷贝构造"，把参数改成 `const&` 并不解除** —— 已实测）
+      → 删掉冗余的重载，交给编译器合成（拷贝/移动四个特化成员全在，`d = 0.5f` 语义不变，实测）；
+    ④ `grad_graph.hpp` 补两处"明确失败"：二元算子 arity 不匹配、`Function` 节点 `matrixF`
+      未设置（原来分别是 nullptr 解引用与 `matrixF[0][0]` 越界读）；
+    ⑤ demo 里 `SumAll` 节点的占位形状 `1x2` → `1x1`（建图期形状与运行期不符的隐患，
+      `y = sum(a)*k` 会抛尺寸不匹配，实测）。
+  - **反向模式已明确标记未实现**：`ComputationGraph::Backward` 改为抛 `logic_error`
+    （实测：节点 adjoint 从未按形状初始化，第一节点就抛 `Matrix dimension mismatch`，
+    报错会把人误导到 Matrix 上）；`GradNode::Backward` 保留为草稿并注明未验证。
+    按 `matrix.md` §7.5 这属于**待立项功能**而非 bug。
+  - demo 注册：`scalar_traits`（新增，`demo/core/`，44 项检查）+ `compute_graph`（36 项检查），
+    **ctest 2/2 通过**；`a_triangle` 无 CMakeLists 未注册。
+  - **V1.1–V1.7 验收一个没跑。demo 全绿 ≠ V1 验收过（demo 是 forward-mode 计算图，
+    与 V1.1–V1.4 的 linalg 验收是两条线）。**
 
 ---
 
@@ -72,10 +114,21 @@
 
 **工程线**（用户自定节奏；任务定义与阈值见 `graphics/plan.md` 阶段 1）
 
-- [ ] CMake 升 C++20 ｜ 对应 `plan.md` V1.x 前置
-- [ ] matrix 实数/复数 scalar trait 改造（用户自行）
-- [ ] linalg：LU + Solve
-- [ ] 积分器：Euler / RK4 / Verlet
+- [x] 修 `grad_graph.hpp` / `compute_graph.cpp` 编译错误 → **2026-10-13 完成**（真因见 §3 第 2 条：
+      `enum class` 作用域前缀 35 处 + `Matrix(1,1)` CTAD 2 处 + 缺 `Output`/`Mult` 分支）；
+      `ctest --test-dir graphics/build` 2/2 通过
+- [x] 修「接口层」bug（同一会话第二批，见 §3）：标量契约 `const_n → fromReal` + concept 补条目、
+      `ScalarTraits<Dual<T>>::conj/abs2` 成员名、`Derive` 收临时量、`Dual::operator=` 弃用告警、
+      arity/`matrixF` 越界保护、`SumAll` 占位形状；反向模式明确拒绝执行。
+      新增 ctest `scalar_traits`（44 项）+ `compute_graph`（36 项）
+- [ ] 落「基线」提交（用户自行 commit/push；父仓 3 文件 + learning-todo 的 `matrix.md` 各仓分开提交）
+- [ ] **V1.1 前置已清（标量契约成立），但 V1.1 本身仍未通过** —— 需 linalg 落地后按
+      「double 与 Complex 共用同一份源码」实跑
+- [ ] 检查 `Solve` 落盘版细节（消元循环里 `if (max_row != i)` 可疑：与 piv 交换逻辑冲突，需对拍验证）
+- [ ] 写 V1.2 验收 demo：随机矩阵求逆残差 ‖A·A^-1 − I‖∞ < 1e-8（先做实数，复数跟进）
+- [ ] `linalg/inverse.hpp`：`Inverse(A)` = LU + 逐列回代（唯一方法）
+- [ ] `linalg/eigen.hpp`：Jacobi 旋转法（当前只有声明）
+- [ ] `linalg/svd.hpp`：经 A^H·A 特征分解组装 SVD（当前 0 字节）
 
 ---
 
@@ -89,6 +142,70 @@
 ---
 
 ## 6. 进度日志（append-only：只追加，不修改历史条目）
+
+### 2026-10-13
+
+- **工程线实地盘点**（agent 会话，无代码改动）：发现实际代码远超 2026-09-29 日志记录——
+  C++20、scalar/complex/matrix 重写、dual 修复、LU+Solve 均已提交在 `graphics_0` 分支
+  （`a5ff34e`~`2156bb1`，用户自行推进，未走会话）。同时发现三个卡点：
+  ① `compute_graph` demo 编译不过（`grad_graph.hpp` 引用未声明的 `LnMultAll`/`Function`）；
+  ② `inverse.hpp` 有 `scalarTraits<T>` 拼写错误并引用未定义的 `Cholesky(A)`；
+  ③ `Solve` 的消元循环 `if (max_row != i)` 逻辑可疑（与 piv 交换语义冲突，且 `SwapRow(result.U, j, max_row)` 只换 U 不换 L 已换行）。
+  V1.1–V1.7 验收全部未跑。§0 指针、§3 现状、§4 工程待办已按实际状态同步。
+
+- **compute_graph 基线落地**（工程线，代码改动；`cmake --build graphics/build` + `ctest` 1/1 通过，
+  4 组用例 36 项检查全 OK）。**根因更正**：不是旧记的「`LnMultAll`/`Function` 未声明」——
+  这两个名字是 `GradOp` 的合法枚举值；真因是 `enum class` 迁移留下的三类适配问题。
+  改动清单：① `grad_graph.hpp` 两处 switch 的 35 个 `case X:` 加 `GradOp::` 前缀
+  （其中 `SumAll`/`MultAll` 还会撞 `jacobian.hpp` 同名函数，报错信息极具误导性）；
+  ② 类内 CTAD 失败 2 处：`Matrix(1, 1)` → `Matrix<T>(1, 1)`；
+  ③ 补两个**缺失分支**：`Output`（透传 —— 缺它导致所有用例输出恒 0）与 `Mult`
+  （逐元素乘，与 `CWiseMult` 同义；不补则 `y=w*x` 这类用例算出全零却"编译通过"）；
+  ④ 未实现算子（`CWisePow`/`LnMultAll`/`CrossEntropy`/`Sigmoid`/`Relu`/`Tanh`/`Softmax`）
+  由静默 `break` 改为 `throw std::logic_error("...: 未实现")`，杜绝静默零值；
+  ⑤ demo 有限差分步长 `h` 由 1e-3 提到 1e-2（float 中央差分舍入 ~ eps·|y|/h ≈ 3.7e-3，
+  原值在 `∂y/∂x2[0]` 一项假报 FAIL：1.99890 vs 2.0；四个用例对被扰动变量都是线性的，
+  截断误差为 0，故加大 h 纯赚）；⑥ demo 头部注释的 `g++ -std=c++17` 单编说明改为 cmake/ctest。
+  新增待改项（见 §4）：`scalar.hpp` 的 `ScalarTraits<Dual<T>>::conj/abs2` 成员名写成
+  `x.real`/`x.dual`（Dual 实为 `value`/`derive`）；`jacobian.hpp` 的 `Derive` 收不了临时量。
+  **本次未提交**（留用户核验后自行 commit/push）。
+
+- **基线"接口层"bug 清完**（工程线，代码改动；`ctest` **2/2** 通过）。把上一条列的"已知边界"
+  里属真 bug 的部分修掉，逐条都有实测证据：
+
+  1. **标量契约与设计文档漂移（最重的一条）**：`scalar.hpp` 里是文档中不存在的
+     `const_n(内层 T)`，而 `matrix.md` §7.1 第 2 条要的是 `fromReal(real_t)`（且
+     `complex.hpp` 的 `sqrt` 已经在调 `fromReal` —— 一实例化就编译错，只是没人调过）。
+     后果用 `static_assert` 实测：`Scalar<Complex<double>>`、`Scalar<Dual<float>>`
+     **双双不成立**，于是任何 `requires CommutativeScalar<T>` 的 linalg 函数都拒绝
+     Complex/Dual —— **V1.1 与 V1.5 直接卡死在这一条上**。已按设计改名、补进 concept
+     （顺带堵住 §7.1 点名的"泛型代码裸写字面量"假设），并同步 `matrix.md` §1.2 的
+     concept 片段与特化表（learning-todo 子仓，另提交）。
+  2. `ScalarTraits<Dual<T>>::conj/abs2` 里的成员名 `x.real`/`x.dual` → `x.value`/`x.derive`
+     （`Matrix<Dual<float>>::Adjoint()` 实测：修前报 `no member named 'real' in 'Dual<float>'`，
+     修后 `Adjoint[0][0] = (1.0, 0.1)` 对）。
+  3. `jacobian.hpp` 的 `Derive(Matrix<T>&)` → 按值收参返回（`Backward` 实例化报
+     `no matching function for call to 'Derive'`，两处；修后编译通过）。
+  4. `dual.hpp` 手写 `operator=` → 删除。**触发 `-Wdeprecated-copy` 的条件是
+     "有 user-provided 拷贝赋值 + 无 user-declared 拷贝构造"，把参数改成 `const&` 不解除**
+     （先按 const& 改、告警仍在，实测）；删掉后拷贝/移动四个特化成员全由编译器合成，
+     `d = 0.5f` 语义不变（探针验证），`-Wall -Wextra` 下四个 TU 告警数全 0。
+  5. `grad_graph.hpp` 补两处"明确失败"：二元算子 arity ≠ 2、`Function`/`MatrixFunction`
+     的 `matrixF` 为空（原来分别是 nullptr 解引用段错误、`matrixF[0][0]` 越界读）；
+     实测分别抛出 `GradNode::Forward: 二元算子需要 2 个输入, 实际 1` 与
+     `Function: matrixF 未设置 (空 0x0)`。
+  6. `demo` 里 `SumAll` 节点的占位形状 `1x2` → `1x1`：建图期与运行期形状不符的隐患，
+     实测 `y = sum(a)*k` 修后得 50（修前会在 `cwiseProduct` 抛尺寸不匹配）。
+  7. **反向模式明确标记未实现**：`ComputationGraph::Backward` 改为抛 `logic_error`
+     —— 实测跑它必然在第一节点抛 `Matrix dimension mismatch`（节点 adjoint 从未按形状初始化），
+     这个报错会把人误导到 Matrix 上去。按 §7.5 属**待立项功能**，不是 bug；
+     `GradNode::Backward` 保留为未验证草稿。
+  8. **新增 ctest 用例 `scalar_traits`**（`demo/core/`，44 项检查）：静态断言钉契约
+     （含 `Dual<Complex<double>>`）、`matrix.md` §1.3 铁律要求的 `a*b == b*a` 交换律单测
+     （Complex / Dual / Dual<Complex> 三类型）、Complex 与 Dual 原函数对拍。
+     这个用例本来是缺的 —— 有它，第 1 条那种漂移在编译期就会被抓住。
+  **本次仍未提交**（留用户核验后自行 commit/push；父仓 4 文件 + 新增 2 文件，
+  `matrix.md` 属 learning-todo 子仓需单独提交）。
 
 ### 2026-09-29
 
