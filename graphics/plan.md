@@ -307,6 +307,45 @@
       新增 ctest 用例 **`scalar_traits`**（`demo/core/`）：静态断言钉契约 + 交换律单测
       + Complex/Dual 原函数对拍，44 项检查。<br>→ 注意：**这不等于 V1.1 通过**，
       V1.1 还要求 linalg（inverse/eigen/svd）真的落地并跑出残差。
+- [ ] **V1 收尾体检（2026-10-14 探针实测）：V1.1–V1.7 一条都还没通过，不能收尾。**
+      根因不是"还差几个函数"，而是 **linalg 从未被任何编译单元 include** —— `demo/` 只有
+      `scalar_traits` 与 `compute_graph` 两个 ctest，528 行 `linalg/*.hpp` 一次都没进过编译器，
+      所以"看着写完了"。`-fsyntax-only` 实例化探针实测（两轮共 32 个编译错误）：
+  - [x] `solve.hpp`（**2026-10-14 修复，S1**）：`SwapRow` 定义 2 参而调用处传 3 参；函数体里用
+    未声明的 `max_row`；`Tol` 未定义（改为随规模缩放的 eps 倍数 → `DefaultTol<T>(n)`）；
+    `piv[j]` 应为 `result.piv[j]`；主元比较写裸 `>`（违反 D7 —— Complex/Dual 没有 `operator>`）。
+    另有两处**编过也全错**的真 bug：① 消元整段被 `if (max_row != i)` 包住 —— 主元行恰好落在 i
+    上时整段跳过，U 少消一行、L 少一个乘子，静默出错；② **换行时 L 的乘子列没有跟着换**
+    （`r1`/`r2` 已带乘子时 `P·A != L·U`）。顺带定下运算符口径：Complex/Dual 无复合赋值，
+    泛型 linalg 只能写 `a = a - b`。
+    验收：新增 ctest 用例 **`solve`**（`demo/linalg/solve.cpp`，34 项检查）+ 测试基建
+    **`demo/common.hpp`**（`MaxAbs2`/`NormInf`/`IsApprox`/实-复-Dual 随机矩阵/`Checker`）。
+    **注入反例实测**：去掉乘子换行 → 15 条 FAIL；恢复 `if (max_row != i)` → 26 条 FAIL。
+  - `inverse.hpp`：`scalarTraits` 拼写（应为 `ScalarTraits`）；`Identity<T>(n)` 应为
+    `Matrix<T>::Identity(n)`；`diagonal_inverse` 里 `tol` 未声明；`Cholesky(A)`/`Solve`
+    均未 include；`Inverse` 只有声明、无定义。
+  - `eigen.hpp`：`eig` 调 `is_symmetric(A)` 缺 `tol` 实参；`Identity(n, n)` 只收 1 参；
+    `ScalarTraits()::one()/zero()` 语法错；`jacobi` 定义在使用点之后（非 ADL 不可见）；
+    **且实现是 2x2 单次旋转，不是 Jacobi 迭代**（无收敛循环、无非对角元判据）。
+  - `qr.hpp`（不在阶段 1 清单，但已建文件）：`real_t` 未定义、`aplha`/`Cows` 拼写、
+    `QRComposition` 大小写、`ScalarTraits<double>::Zero` 不存在、`Dot` 调不到。
+  - `operator.hpp`：`Dot` 是成员函数残骸 —— 自由函数里用 `this->rows/cols/data`。
+  - `cholesky.hpp` 是**唯一**能通过实例化的新文件。
+  - 空文件：`svd.hpp`（V1.4 必需）、`expm.hpp`（V1.6 必需）、`householder.hpp`；
+    `dot.hpp` 已删（无引用残留）。
+  - 本阶段要求的 `demo/common.hpp`（`IsApprox` / 实-复-Dual 随机矩阵生成）**不存在**。
+  - 收尾步骤 **S1–S7**（2026-10-14 定稿：一步一文件一用例一提交，不并发开两个文件）：
+    - **S1 `solve.hpp`**（LU + Solve）+ `demo/common.hpp` 测试基建 + `demo/linalg/solve.cpp`
+      —— ✅ 已完成
+    - S2 `inverse.hpp`（补 `Inverse` 分发 + 修 `scalarTraits`/`Identity<T>`/`tol`/`Cholesky`）
+      + `demo/linalg/inverse.cpp` → **V1.2 硬验收**
+    - S3 `eigen.hpp` 重写为**真 Jacobi 迭代**（现为 2×2 单次旋转）+ `demo/linalg/eigen.cpp`
+      → **V1.3**
+    - S4 `svd.hpp`（经 A^H·A 特征分解组装）+ `demo/linalg/svd.cpp` → **V1.4**
+    - S5 `expm.hpp`（0 字节 → 落地）+ `demo/linalg/expm.cpp` → **V1.6**（so(3) 对易）
+    - S6 `operator.hpp` / `qr.hpp` / `householder.hpp` 派支线处置决定 + `demo/linalg/smoke.cpp`
+      （每个公开入口在 double 与 Complex 下各实例化一次 —— 同类问题防复发闸门）
+    - S7 文档收尾：V1.1–V1.7 勾选 + dev-progress §3/§4/§6 + 记忆
 - [ ] **反向模式（`ComputationGraph::Backward` / `GradNode::Backward`）已明确标记未实现**
       （2026-10-13 改为抛 `logic_error`）：实测节点 adjoint 从未按形状初始化，
       第一个节点就抛 `Matrix dimension mismatch`，会把排查引到 Matrix 上。

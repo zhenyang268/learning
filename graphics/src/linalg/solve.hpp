@@ -3,8 +3,19 @@
 #include "core/common.hpp"
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
+#include <limits>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
+// 运算符纪律: 只用 Scalar concept 保证的 + - * / 。
+// Complex / Dual 都没有复合赋值 (也没有 operator>), 泛型 linalg 代码里写 `x -= y`
+// 会在 Matrix<Complex<double>> 上直接编不过 —— 这不是 Complex 的 bug, 是 concept 的口径。
+//
+// LU 分解 (带部分选主元): P·A = L·U
+//   piv[j] = 第 j 步选出的主元行号 (在"当前部分矩阵"里的行号);
+//   按 j 递增顺序依次交换 (j, piv[j]), 就是置换 P 本身。
+// 换行时乘子列必须跟着换 —— L 的行序 = 置换后 A 的行序, 见 SwapMultipliers。
 template <typename T>
 struct LUResult
 {
@@ -13,86 +24,132 @@ struct LUResult
     std::vector<int> piv;
 };
 
+// D12 / matrix.md §2.4: 容差 = eps 的倍数, 且随规模缩放 —— 不写魔数。
+// 不能用全局 Tol: 那是 float 的 epsilon, 对 Matrix<double> 量级完全不对。
 template <CommutativeScalar T>
-void SwapRow(Matrix<T> &A, int row)
+typename ScalarTraits<T>::real_t DefaultTol(int n)
 {
-    // 交换矩阵A的row行和max_row行
+    using real_t = typename ScalarTraits<T>::real_t;
+    return real_t(8) * real_t(n) * std::numeric_limits<real_t>::epsilon();
+}
+
+// 整行交换 (r1, r2 都是在当前矩阵里的行号)
+template <CommutativeScalar T>
+void SwapRow(Matrix<T>& A, int r1, int r2)
+{
     for (int j = 0; j < A.Cols(); j++) {
-        std::swap(A(row, j), A(max_row, j));
+        std::swap(A(r1, j), A(r2, j));
     }
 }
 
-// piv记录换行, 本质上就是在说, 怎么重排A使得PA可以无痛分解成LU, 当然B也得重排
-// eg 1 / 1e-20 = 1e20数据爆炸, 没办法用, 必须用小数
+// L 的乘子列 [0, upto) 互换。
+// 不能整行换: L 是单位下三角, 对角线上的 1 与行序号绑定, 整行换会把结构换坏
+// (换完 P·A != L·U, 而结果看着"像那么回事")。
+template <CommutativeScalar T>
+void SwapMultipliers(Matrix<T>& L, int r1, int r2, int upto)
+{
+    for (int k = 0; k < upto; k++) {
+        std::swap(L(r1, k), L(r2, k));
+    }
+}
+
+// eg 1 / 1e-20 = 1e20 数据爆炸 -> 必须选主元, 否则小主元把小误差放大成大错
 template <CommutativeScalar T>
 LUResult<T> LU(const Matrix<T>& A)
 {
+    using real_t = typename ScalarTraits<T>::real_t;
+
+    if (A.Rows() != A.Cols())
+        throw std::invalid_argument("LU: A 必须是方阵");
+
+    const int n = A.Rows();
+    const real_t tol = DefaultTol<T>(n);
+    const real_t tol2 = tol * tol;   // 下面比 abs2 <= tol^2, 等价于 |p| <= tol 且免开方 (D7)
+
     LUResult<T> result;
-    result.L = Matrix<T>::Identity(A.Rows());
+    result.L = Matrix<T>::Identity(n);
     result.U = A;
-    result.piv.resize(A.Cols());
-    for (int j = 0; j < A.Cols(); j++) {
+    result.piv.assign(n, 0);
+
+    for (int j = 0; j < n; j++) {
+        // --- 选主元: 比较只走 abs2 —— Complex / Dual 没有 operator> (D7) ---
         int max_row = j;
-        T max_val = result.U(j, j);
-        for (int i = j; i < A.Rows(); i++) {
-            if (result.U(i, j) > max_val) {
+        real_t best = ScalarTraits<T>::abs2(result.U(j, j));
+        for (int i = j + 1; i < n; i++) {
+            const real_t v = ScalarTraits<T>::abs2(result.U(i, j));
+            if (v > best) {
+                best = v;
                 max_row = i;
-                max_val = result.U(i, j);
             }
         }
-        if (ScalarTraits<T>::abs2(max_val) <= Tol) {
-            throw std::runtime_error("matrix is singular");
-            return result;
+        if (best <= tol2) {
+            throw std::runtime_error("LU: 主元 |p| <= tol, 矩阵奇异或近奇异");
         }
+        result.piv[j] = max_row;
 
         if (max_row != j) {
             SwapRow(result.U, j, max_row);
-        }
-        for (int i = j+1; i < A.Rows(); i++) {
-            if (max_row != i) {
-                result.L(i, j) = result.U(i, j) / max_val;
-                // 记录m构造下三角L
-                // 更新U
-                for (int k = j; k < A.Cols(); k++) {
-                    result.U(i, k) -= result.L(i, j) * result.U(i, k);
-                }
-            }
+            SwapMultipliers(result.L, j, max_row, j);
         }
 
-        piv[j] = max_row;
+        // --- 消元: i > j 的每一行都要做 ---
+        // 原先写成 `if (max_row != i) { ... }` 是错的: 主元行恰好落在 i 上时整段被跳过,
+        // U 少消一行、L 少一个乘子, 编译能过而结果静默出错。
+        const T pivot = result.U(j, j);
+        for (int i = j + 1; i < n; i++) {
+            const T mul = result.U(i, j) / pivot;
+            result.L(i, j) = mul;
+            for (int k = j; k < n; k++) {
+                result.U(i, k) = result.U(i, k) - mul * result.U(j, k);
+            }
+        }
     }
     return result;
 }
 
+// 解 A·X = B (B 单列时即教科书的 A·x = b, D19 修订版: 列向量)
+//   1) 换行作用到 B 上: P·A·X = P·B
+//   2) 前代解 L·Y = P·B
+//   3) 回代解 U·X = Y
 template <CommutativeScalar T>
 Matrix<T> Solve(const Matrix<T>& A, Matrix<T> B)
 {
-    LUResult<T> result = LU(A);
-    // TODO: 实现LU分解后的求解逻辑
-    // 1. 把piv应用到B上
-    for (int i = 0; i < B.Rows(); i++) {
-        if (result.piv[i] != i) {
-            SwapRow(B, i, result.piv[i]);
+    if (A.Rows() != A.Cols())
+        throw std::invalid_argument("Solve: A 必须是方阵");
+    if (B.Rows() != A.Rows())
+        throw std::invalid_argument("Solve: B 的行数必须等于 A 的阶数");
+
+    const int n = A.Rows();
+    const int nCols = B.Cols();
+
+    const LUResult<T> lu = LU(A);
+
+    // 1) 置换: 顺序与记录顺序一致 (j 递增), 依次交换 (j, piv[j])
+    for (int j = 0; j < n; j++) {
+        if (lu.piv[j] != j) {
+            SwapRow(B, j, lu.piv[j]);
         }
     }
-    // 2. 把L-1应用到B上, LUX = PB
-    for (int i = 0; i < B.Rows(); i++) {
+
+    // 2) 前代: L 单位下三角, 乘子已在 LU 里跟着换过行
+    for (int i = 0; i < n; i++) {
         for (int k = 0; k < i; k++) {
-            for (int j = 0; j < B.Cols(); j++) {
-                B(i, j) -= result.L(i, k) * B(k, j);
+            const T mul = lu.L(i, k);
+            for (int j = 0; j < nCols; j++) {
+                B(i, j) = B(i, j) - mul * B(k, j);
             }
         }
     }
-    // 3. 解UX = B
-    Matrix<T> X(A.Rows(), B.Cols());
-    for (int i = A.Rows() - 1; i >= 0; i--) {
-        for (int j = 0; j < B.Cols(); j++) {
-            for (int k = i+1; k < A.Cols(); k++) {
-                B(i, j) -= result.U(i, k) * X(k, j);
+
+    // 3) 回代 (B 此时就是 Y; 不原地改 Y, 回代里要读它)
+    Matrix<T> X(n, nCols);
+    for (int i = n - 1; i >= 0; i--) {
+        for (int j = 0; j < nCols; j++) {
+            T acc = B(i, j);
+            for (int k = i + 1; k < n; k++) {
+                acc = acc - lu.U(i, k) * X(k, j);
             }
-        }
-        for (int j = 0; j < B.Cols(); j++) {
-            X(i,j) = B(i, j) / result.U(i, i);
+            X(i, j) = acc / lu.U(i, i);
         }
     }
     return X;
