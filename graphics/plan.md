@@ -385,7 +385,20 @@
       **注入反例**：① 只扫一轮 → **16 条 FAIL**（**n=2 免疫、n ≥ 3 全中** —— 正是"必须循环"
       的硬证据：2×2 只有一对非对角元，一次旋转就彻底清零）；② 漏 `conj` → **24 条 FAIL
       全在 complex、实对称 0 条**，连 Q 的酉性都一起坏（漏 conj 直接破坏 U 的酉性）。
-    - S4 `svd.hpp`（经 A^H·A 特征分解组装）+ `demo/linalg/svd.cpp` → **V1.4**
+    - S4 `svd.hpp`（经 A^H·A 特征分解组装）+ `demo/linalg/svd.cpp` → **V1.4** —— ✅ 已完成（2026-10-14）：
+      原文件是 19 行空壳（只有 `SVDcomposition` 声明，无实现、无引用点）。`B = A^H·A` 走 `eig_symmetric`，
+      `σ_i = √λ_i`（非负根 + 降序）、`u_i = A·v_i/σ_i`；经济型 U(m×r) / Σ(r×r) / V(n×r)，r = min(m,n)。
+      σ ≈ 0 的列（秩亏）用 Gram-Schmidt 扫标准基补正交补（`linalg_detail::FillOrthonormalColumn`）。
+      **σ 的精度不拖累重构**：`U·Σ·V^H = A·(V·V^H)`，σ 与 1/σ 精确相消 —— 第③条注入反例就是它的数值证据。
+      判据分层：U 列正交判 1e-10（方向精度 eps·κ(A)，实测最差 2.456e-13）、V 判 1e-12（实测 ~1e-16）。
+      验收：新增 ctest **`svd`**（`demo/linalg/svd.cpp`，266 项）—— V1.4 最差重构
+      **double 1.332e-15 / complex 7.772e-16**（判据 1e-8）；`Σσ² = ‖A‖_F²` 相对差 ≤ 2.9e-16；
+      `σ_i²` 与 `eig(AᴴA)` 谱逐项吻合 ≤ 1.9e-16；覆盖实/复 × 方阵/长方阵 + 秩亏/零矩阵/1×1/1×2 + 解析对拍。
+      **注入反例**：① `Adjoint` → `Transpose` → **34 条 FAIL 全在 complex、实数域 0 条**（实矩阵下二者等价、
+      天然免疫 —— 与 S2a/S3 漏 conj 第三次同构）；② 不排序 → 5 条 FAIL 且**重构一条不挂**，
+      **并暴露判据覆盖漏洞**（原对角用例 `diag(3,−2)` 本就降序）→ 已补「升序输入」用例
+      （`diag(1,5,3)` 实 / `diag(1,4,2)` 复）；③ **σ 不开方 → 102 条 FAIL 但「重构」0 条挂** ——
+      证明 V1.4 的字面判据「重构 < 1e-8」单独抓不到 σ 算错，必须有独立判据兜底。
     - S5 `expm.hpp`（0 字节 → 落地）+ `demo/linalg/expm.cpp` → **V1.6**（so(3) 对易）
     - S6 `operator.hpp` / `qr.hpp` / `householder.hpp` 派支线处置决定 + `demo/linalg/smoke.cpp`
       （每个公开入口在 double 与 Complex 下各实例化一次 —— 同类问题防复发闸门）

@@ -23,3 +23,9 @@ target_include_directories(eigen PRIVATE
     ${GRAPHICS_SRC_DIR}
 )
 add_test(NAME eigen COMMAND eigen)
+
+add_executable(svd svd.cpp)
+target_include_directories(svd PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME svd COMMAND svd)
