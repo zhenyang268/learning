@@ -381,6 +381,35 @@
     u 用错 σ 算、再乘错误的 σ，`U·Σ·V^H` 依旧精确等于 A。**结论：V1.4 的字面判据「重构 < 1e-8」
     单独抓不到 σ 算错**，必须靠 `Σσ² = ‖A‖_F²`、`σ_i² = λ_i(AᴴA)`、解析对拍这些独立判据兜底 ——
     这是本刀最有价值的一条反例。
+  - **提交**：S4 单独一刀 `edfc572`（2026-10-14，未 push）。
+
+- **S6b `qr.hpp` 三函数修复**（用户要求提前做 qr、跳过 S5 顺序；`operator.hpp` + `qr.hpp` +
+  新增 `demo/linalg/qr.cpp` 189 项；ctest **8/8**）：
+  - `operator.hpp`：`Dot`/`Abs2` 是**成员函数残骸**（自由函数里用 `this->rows/cols/data`，
+    `Abs2` 还写了大写 `matrix.Data`）。改为两参 `Dot(a,b) = Σ conj(aᵢ)·bᵢ`（**补上共轭**，
+    原版没有 —— 第 4 个「double 免疫」点）、`Abs2` 返回 `real_t`。
+  - `qr.hpp` 编译层 9 处（`real_t` 裸用 / `aplha`·`Cows`·`QRComposition` 拼写 / `One`·`Zero` 大小写 /
+    `Identity` 多传一参 / `atan2` 单参 / `-=` / 缺 `return`）。
+  - **算法层三处（编译过也会错，这才是值钱的）**：
+    ① `QR_Householder` 分母 `Abs2(X)` 算的是**改前**的 ‖x‖²，而 `H = I − 2vvᴴ/(vᴴv)` 的分母必须是
+    **改后**的 vᴴv（= 2‖x‖(‖x‖+Re x₁)）—— 量用错，H 不再对合、消不掉 x；`+sqrt(alpha)` 恒取正号、
+    无符号选择（x₁<0 时灾难性相消）；`H.Transpose()` 复数域应为 `Adjoint`。
+    ② `QR_givens` 内层循环 `for (j=i+1; j<i; …)` 条件永不成立（死码），用户改成 `j < A.Rows()` 后
+    **立刻堆越界**（ASan: heap-buffer-overflow @ qr.hpp）—— 因为 R 只有 n 列。**根因是循环结构本身是镜像**：
+    正确结构是外层列 j、内层行 i>j（消下三角），原版是外层行 i、内层列 j>i（去消上三角）。
+    ③ `QR_Shimit` 把投影系数塞进 `Q(k,j)`（Q 应是正交基矩阵）、拿 `res.R` 的第 k 列当"已正交基"
+    （该取 Q 的列）、无归一化、`res.Q = Q * res.Q` 语义完全不对 —— 与 Gram-Schmidt 无关。
+  - **修复**：三个函数重写。householder 用 `v = x + phase(x₁)·‖x‖·e₁`（分母取改后 vᴴv、`Adjoint`）；
+    givens 改成外层列内层行、复相位 `s = (f/|f|)·conj(g)/r`；shimit 重写为**修正 Gram-Schmidt (MGS)**
+    （逐次用当前 v_j 算系数、列归一化落 R 对角、秩亏走正交补补齐）。
+    **统一 thin QR 口径**：Q: m×n 列正交，R: n×n 上三角，`A = Q·R`；`m < n` 三个入口统一 throw。
+  - **验收**：`qr` 189 项 / FAIL 0；V2.1 最差重构 **9.93e-16**、Q 列正交 **8.88e-16**（判据 1e-8 / 1e-12）；
+    覆盖实/复 × 方阵/长方阵/列向量 + 解析对拍（对角/单位/2×2 闭式）+ 秩亏/零矩阵/1×1 + 异常（空/`m<n`）。
+  - **注入反例 4 条**：① 分母退回改前 ‖x‖² → **35 条 FAIL 全在 householder**（givens/mgs 0 条）；
+    ② givens `Adjoint`→`Transpose` → **3 条全在 complex、实数域 0 条**（第 4 次「double 免疫」）；
+    ③ MGS 内积漏 `conj` → **3 条全在 complex**（Q 酉性崩到 4.3e-1）；
+    ④ 去掉相位/符号选择 → 5 条，**首轮实数域 0 条 → 暴露判据覆盖漏洞**（实数用例 x₁ 全为正）
+    → 补「病态 x₁<0」用例（`[[-1,0],[1e-6,1]]`）后重跑，**实数域 0 → 1 条**（相消残渣 8.89e-11）。
   - **未提交**（用户要求「后续提交等命令」）。
 
 ### 2026-10-13

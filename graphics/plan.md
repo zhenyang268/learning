@@ -337,9 +337,20 @@
   - `eigen.hpp`：`eig` 调 `is_symmetric(A)` 缺 `tol` 实参；`Identity(n, n)` 只收 1 参；
     `ScalarTraits()::one()/zero()` 语法错；`jacobi` 定义在使用点之后（非 ADL 不可见）；
     **且实现是 2x2 单次旋转，不是 Jacobi 迭代**（无收敛循环、无非对角元判据）。
-  - `qr.hpp`（不在阶段 1 清单，但已建文件）：`real_t` 未定义、`aplha`/`Cows` 拼写、
-    `QRComposition` 大小写、`ScalarTraits<double>::Zero` 不存在、`Dot` 调不到。
-  - `operator.hpp`：`Dot` 是成员函数残骸 —— 自由函数里用 `this->rows/cols/data`。
+  - `qr.hpp`（不在阶段 1 清单，但已建文件）—— **2026-10-14 编译层 + 算法层全部修复（S6b）**：
+    编译层 9 处：`real_t` 未定义、`aplha`/`Cows` 拼写、`QRComposition` 大小写、
+    `ScalarTraits<T>::Zero/One` 大小写、`Identity` 多传一参、`atan2` 单参、`-=` 复合赋值、缺 `return`。
+    **算法层（编译过也会错）**：① `QR_Householder` 分母用了**改前**的 ‖x‖²（应为改后 vᴴv，
+    否则 H 不再对合、消不掉 x）、`+sqrt` 无符号选择（x₁<0 时灾难性相消）、`H.Transpose()` 复数域应为 `Adjoint`；
+    ② `QR_givens` 循环写成"外层行 i、内层列 j>i"——**是正确结构的镜像**（应外层列 j、内层行 i>j），
+    且 j 上界用 `A.Rows()` 而 R 只有 n 列 → **堆越界**（ASan 实证）；`atan2` 取 `real()` 丢虚部，复数域无解；
+    ③ `QR_Shimit` 把投影系数塞进 Q（Q 应是正交基矩阵）、拿 R 的列当"已正交基"、无归一化、R 不更新 ——
+    与 Gram-Schmidt 无关。**三个函数全部重写**，并统一 thin 口径（Q: m×n，R: n×n）。
+    验收：新增 ctest **`qr`**（`demo/linalg/qr.cpp`，189 项）—— 见下文 S6b。
+  - `operator.hpp` —— **2026-10-14 修复（S6b 前置）**：`Dot`/`Abs2` 是成员函数残骸
+    （自由函数里用 `this->rows/cols/data`，`Abs2` 还写了大写成员 `matrix.Data`）。
+    改为两参 `Dot(a,b) = Σ conj(aᵢ)·bᵢ`（**补上共轭** —— 原版没有，是第 4 个「double 免疫」点）、
+    `Abs2` 返回 `real_t`。
   - `cholesky.hpp` 是**唯一**能通过实例化的新文件。
   - 空文件：`svd.hpp`（V1.4 必需）、`expm.hpp`（V1.6 必需）、`householder.hpp`；
     `dot.hpp` 已删（无引用残留）。
@@ -402,6 +413,18 @@
     - S5 `expm.hpp`（0 字节 → 落地）+ `demo/linalg/expm.cpp` → **V1.6**（so(3) 对易）
     - S6 `operator.hpp` / `qr.hpp` / `householder.hpp` 派支线处置决定 + `demo/linalg/smoke.cpp`
       （每个公开入口在 double 与 Complex 下各实例化一次 —— 同类问题防复发闸门）
+    - **S6b `qr.hpp` 三函数修复（2026-10-14，用户选「三个都修」）** —— ✅ 已完成：
+      `operator.hpp` 的 `Dot`/`Abs2` 修正 + `qr.hpp` 编译层 9 处 + **三个函数算法层重写**
+      （householder：分母/相位/`Adjoint`；givens：循环结构反了 + 堆越界；shimit：重写为 MGS）。
+      统一 thin QR 口径（Q: m×n 列正交，R: n×n 上三角，`A = Q·R`；`m < n` 三个入口统一 throw）。
+      验收：ctest **8/8**，`qr` 用例 **189 项 / FAIL 0**；V2.1 最差重构 **9.93e-16**、
+      Q 列正交 **8.88e-16**（判据分别 1e-8 / 1e-12）。判据三条：重构 ‖QR−A‖、列正交 ‖QᴴQ−I‖、
+      R 严格下三角 < 1e-14（浮点残渣必然非零，判"== 0"是判错了）。
+      **注入反例 4 条**：① householder 分母退回改前 ‖x‖² → **35 条 FAIL 全在 householder**
+      （givens/mgs 0 条）；② givens `Adjoint`→`Transpose` → **3 条全在 complex、实数域 0 条**
+      （第 4 次同构的「double 免疫」）；③ MGS 内积漏 `conj` → **3 条全在 complex**（Q 酉性崩）；
+      ④ 去掉相位/符号选择 → 5 条，**首轮实数域 0 条 → 暴露判据覆盖漏洞**（实数用例 x₁ 全为正）
+      → 补「病态 x₁<0」用例（`[[-1,0],[1e-6,1]]` 实 / 复）后重跑，**实数域 0 → 1 条**，覆盖补上。
     - S7 文档收尾：V1.1–V1.7 勾选 + dev-progress §3/§4/§6 + 记忆
 - [ ] **反向模式（`ComputationGraph::Backward` / `GradNode::Backward`）已明确标记未实现**
       （2026-10-13 改为抛 `logic_error`）：实测节点 adjoint 从未按形状初始化，

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <stdexcept>
 #include "core/common.hpp"
 #include "core/matrix.hpp"
@@ -16,118 +17,239 @@
  * @param A 矩阵
  */
 
+// 统一口径 (三个分解共用, thin / reduced QR; 要求 m >= n):
+//   Q: m×n, 列正交/酉 (Q^H·Q = I_n)
+//   R: n×n, 上三角, A = Q·R
+// 宽矩阵 (m < n) 在 thin 约定下退化 —— 三个入口统一抛错, 不去猜另一种语义。
 template <CommutativeScalar T>
 struct QRcomposition
 {
     using real_t = typename ScalarTraits<T>::real_t;
-    Matrix<T>           Q;       // 特征向量按列存放, m*m, 酉/正交
-    Matrix<T>           R;      // 上三角矩阵
+    Matrix<T>           Q;       // 正交/酉基, m×n, 按列存放
+    Matrix<T>           R;       // 上三角, n×n
 };
+
+namespace qr_detail {
+
+// 取前 c 列 (m×k -> m×c)
+template <CommutativeScalar T>
+Matrix<T> LeftCols(const Matrix<T>& A, int c)
+{
+    Matrix<T> res(A.Rows(), c);
+    for (int i = 0; i < A.Rows(); i++)
+        for (int j = 0; j < c; j++) res(i, j) = A(i, j);
+    return res;
+}
+
+// 取前 r 行 (k×n -> r×n)
+template <CommutativeScalar T>
+Matrix<T> TopRows(const Matrix<T>& A, int r)
+{
+    Matrix<T> res(r, A.Cols());
+    for (int i = 0; i < r; i++)
+        for (int j = 0; j < A.Cols(); j++) res(i, j) = A(i, j);
+    return res;
+}
+
+// 给 X 的第 col 列补一个"与前面 col 列都正交的单位向量"(秩亏时的兜底)。
+// 做法就是拿标准基 e_c 逐个试, 减掉在已有列上的投影, 剩下还够长的那个。
+// 不参与重构 (该列对应 R 的对角元为 0), 只为让 Q 保持列正交。
+template <CommutativeScalar T>
+void FillOrthonormalColumn(Matrix<T>& X, int col)
+{
+    using real_t = typename ScalarTraits<T>::real_t;
+    const int m = X.Rows();
+    const real_t tol = DefaultTol<T>(m);
+
+    for (int cand = 0; cand < m; cand++) {
+        Matrix<T> v = Matrix<T>::Zero(m, 1);
+        v(cand, 0) = ScalarTraits<T>::one();
+        for (int k = 0; k < col; k++) {
+            T acc = ScalarTraits<T>::zero();
+            for (int i = 0; i < m; i++)
+                acc = acc + ScalarTraits<T>::conj(X(i, k)) * v(i, 0);
+            for (int i = 0; i < m; i++)
+                v(i, 0) = v(i, 0) - acc * X(i, k);
+        }
+        real_t n2 = real_t(0);
+        for (int i = 0; i < m; i++) n2 = n2 + ScalarTraits<T>::abs2(v(i, 0));
+        if (n2 > tol * tol) {
+            const real_t nrm = std::sqrt(n2);
+            for (int i = 0; i < m; i++)
+                X(i, col) = v(i, 0) * ScalarTraits<T>::fromReal(real_t(1) / nrm);
+            return;
+        }
+    }
+    throw std::runtime_error("QR: 无法补出正交方向 (列数超过空间维数)");
+}
+
+} // namespace qr_detail
 
 /**
  * householder QR分解
  * Hx = alpha * e1, e1 = [1, 0, 0, ..., 0]T
- * H = I - 2 * v * vT / vT * v
- * Hv = -v  分解 x = v + v_ 所以 x - Hx // v
- * 取v = x - alpha * e1 并且 alpha = -||x||即可
+ * H = I - 2 * v * v^H / (v^H * v)
+ * 取 v = x - alpha * e1, alpha = -phase(x1) * ||x||, 则 Hx = alpha * e1, 且
+ *   v1 = x1 + phase(x1)*||x|| = phase(x1) * (|x1| + ||x||)   —— 是"加", 不相消
+ * 每步只作用在 [j, m) 子块上 (x 的前 j 个分量本来就是 0)。
  */
 template <CommutativeScalar T>
 QRcomposition<T> QR_Householder(const Matrix<T>& A)
 {
-    Matrix<T> X; // 记录每一个列向量
-    QRcomposition<T> res;
-    res.Q = Matrix<T>::Identity(A.Rows(), A.Rows());
-    res.R = A;
-    real_t alpha;
+    using real_t = typename ScalarTraits<T>::real_t;
+    const int m = A.Rows();
+    const int n = A.Cols();
+    if (m == 0 || n == 0)  throw std::invalid_argument("QR_Householder: 空矩阵");
+    if (n > m)             throw std::invalid_argument("QR_Householder: 需要 m >= n (thin QR)");
 
-    for (int j = 0; j < A.Cols(); j++) {
-        X = Matrix<T>(A.Rows(), 1);
-        alpha = 0; // 存VHV, ||V||
-        for (int i = j; i < A.Rows(); i++) {
-            X(i, 0) = res.R(i, j);
-        }
-        aplha = Abs2(X);
-        
-        X(j, 0) = X(j, 0) + sqrt(alpha);
-        Matrix<T> H = Matrix<T>::Identity(A.Rows(), A.Rows());
-        for (int i = j; i < H.Rows(); i++) {
-            for (int k = j; k < H.Cols(); k++) {
-                H(i, k) -= 2 * X(i, 0) * ScalarTraits<T>::conj(X(k, 0)) / alpha;
-            }
-        }
-        res.R = H * res.R;
-        // 这里j,j下面应该全是0了
-        res.Q = res.Q * H.Transpose();
+    Matrix<T> Qf = Matrix<T>::Identity(m);   // 完整 m×m 累积, 末尾截前 n 列
+    Matrix<T> Rf = A;
+
+    for (int j = 0; j < n; j++) {
+        // x = Rf(j:m-1, j)
+        real_t x2 = real_t(0);
+        for (int i = j; i < m; i++) x2 = x2 + ScalarTraits<T>::abs2(Rf(i, j));
+        const real_t xnorm = std::sqrt(x2);
+        if (!(xnorm > DefaultTol<T>(m))) continue;   // 该列已在(数值)对角线上, 跳过
+
+        Matrix<T> v = Matrix<T>::Zero(m, 1);
+        for (int i = j; i < m; i++) v(i, 0) = Rf(i, j);
+
+        // phase = x1/|x1| (x1 = 0 时取 1); alpha = -phase * ||x||
+        const real_t a1 = std::sqrt(ScalarTraits<T>::abs2(v(j, 0)));
+        const T phase = (a1 > real_t(0))
+                      ? v(j, 0) * ScalarTraits<T>::fromReal(real_t(1) / a1)
+                      : ScalarTraits<T>::one();
+        v(j, 0) = v(j, 0) + phase * ScalarTraits<T>::fromReal(xnorm);
+
+        // 分母必须是"改后"的 v^H·v = 2||x||(||x|| + |x1|)。
+        // 原实现用改前的 ||x||² 当分母 —— H 不再是反射 (不对合), 消不掉 x。
+        const real_t v2 = Abs2(v);
+        if (!(v2 > real_t(0))) continue;
+        const T coef = ScalarTraits<T>::fromReal(real_t(2) / v2);
+
+        Matrix<T> H = Matrix<T>::Identity(m);
+        for (int i = j; i < m; i++)
+            for (int k = j; k < m; k++)
+                H(i, k) = H(i, k) - coef * v(i, 0) * ScalarTraits<T>::conj(v(k, 0));
+
+        Rf = H * Rf;
+        // Q = Q·H^H。H 是 Hermitian (vv^H 自伴), 所以 H^H = H; 但复数域下
+        // 必须写 Adjoint() —— Transpose() 只在实矩阵下恰好等价。
+        Qf = Qf * H.Adjoint();
     }
 
-}
-
-template <CommutativeScalar T>
-QRcomposition<T> QR_givens(const Matrix<T>& A)
-{
     QRcomposition<T> res;
-    res.Q = Matrix<T>::Identity(A.Rows(), A.Rows());
-    res.R = A;
-    real_t thelta;
-    Matrix<T> QT = Matrix<T>::Identity(A.Rows(), A.Rows());
-
-    for (int i = 0; i < A.Rows(); i++) {
-        for (int j = i+1; j < i; j++) {
-            // 左乘 [cos, sin] [-sin, cos]这样把左下角变成0
-            thelta = atan2(res.R(i, j)/res.R(j, j));
-            QT(i, i) = cos(thelta);
-            QT(i, j) = -sin(thelta);
-            QT(j, i) = sin(thelta);
-            QT(j, j) = cos(thelta);
-            res.R = QT * res.R;
-
-            QT(i, j) = -QT(i, j);
-            QT(j, i) = -QT(j, i);
-            res.Q = res.Q * QT;
-
-            QT(i, i) = ScalarTraits<T>::One();
-            QT(j, j) = ScalarTraits<T>::One();
-            QT(i, j) = ScalarTraits<T>::Zero();
-            QT(j, i) = ScalarTraits<T>::Zero();
-        }
-    }
-
-
+    res.Q = qr_detail::LeftCols(Qf, n);
+    res.R = qr_detail::TopRows(Rf, n);
     return res;
 }
 
 /**
- * shimit QR分解
- * 通过上三角矩阵Q对A进行施密特正交化
- * 这里就是ak减去自己在前面正交基上的投影
+ * givens QR分解
+ * 用一个只作用在第 j、i 两行上的平面旋转, 把 R(i, j) (i > j) 逐点消成 0。
+ * G = [[ c,  s], [-conj(s), c]]  (c 为实数, |c|² + |s|² = 1) 是酉阵。
+ * 对 (f, g) = (R(j,j), R(i,j)) 取
+ *   r = hypot(|f|, |g|),  c = |f|/r,  phase = f/|f|,  s = phase * conj(g)/r
+ * 则 G·[f; g] = [(f/|f|)·r; 0] —— 第 i 行归零, 第 j 行取得模长 r。
+ * 复数域靠 phase 补自由度: 一个实数角 θ 只能消一个实数条件, 而 g 有实虚两部
+ * (与 eigen 里 ph = z/|z| 同一件事)。
  */
+template <CommutativeScalar T>
+QRcomposition<T> QR_givens(const Matrix<T>& A)
+{
+    using real_t = typename ScalarTraits<T>::real_t;
+    const int m = A.Rows();
+    const int n = A.Cols();
+    if (m == 0 || n == 0) throw std::invalid_argument("QR_givens: 空矩阵");
+    if (n > m)            throw std::invalid_argument("QR_givens: 需要 m >= n (thin QR)");
 
+    Matrix<T> Qf = Matrix<T>::Identity(m);
+    Matrix<T> Rf = A;
+    const real_t tol2 = DefaultTol<T>(m) * DefaultTol<T>(m);
+
+    // 外层列 j, 内层行 i > j —— 消的是下三角。
+    // 原实现写成"外层行 i、内层列 j > i", 是它的镜像 (去消上三角), 而且 j 的上界用了
+    // A.Rows(): R 只有 n 列, j 一超过 n 就越界 (ASan 报的 heap-buffer-overflow)。
+    for (int j = 0; j < n; j++) {
+        for (int i = j + 1; i < m; i++) {
+            const T f = Rf(j, j);
+            const T g = Rf(i, j);
+            const real_t f2 = ScalarTraits<T>::abs2(f);
+            const real_t g2 = ScalarTraits<T>::abs2(g);
+            if (!(g2 > tol2)) continue;              // 已经是 0, 不必旋转
+
+            const real_t r = std::sqrt(f2 + g2);
+            const real_t af = std::sqrt(f2);
+            const real_t c = af / r;                 // cos, 实数非负
+            const T phase = (af > real_t(0))
+                          ? f * ScalarTraits<T>::fromReal(real_t(1) / af)    // f/|f|
+                          : ScalarTraits<T>::one();
+            const T s = phase * ScalarTraits<T>::conj(g)
+                      * ScalarTraits<T>::fromReal(real_t(1) / r);
+
+            Matrix<T> G = Matrix<T>::Identity(m);
+            G(j, j) = ScalarTraits<T>::fromReal(c);
+            G(j, i) = s;
+            G(i, j) = -ScalarTraits<T>::conj(s);
+            G(i, i) = ScalarTraits<T>::fromReal(c);
+
+            Rf = G * Rf;
+            Qf = Qf * G.Adjoint();
+        }
+    }
+
+    QRcomposition<T> res;
+    res.Q = qr_detail::LeftCols(Qf, n);
+    res.R = qr_detail::TopRows(Rf, n);
+    return res;
+}
+
+/**
+ * Gram-Schmidt QR分解 (原注称 "shimit", 即 Schmidt)
+ * 对 A 的每一列做正交化: v_j = a_j - Σ_{k<j} r_kj · q_k, 然后 q_j = v_j / r_jj。
+ * 采用**修正** GS (MGS): 每减掉一次投影, 就用**当前**的 v_j 去算下一个系数
+ * (经典 GS 用原始 a_j 一次算完全部系数 —— 数值上更易失正交; MGS 是它的顺序改进版)。
+ */
 template <CommutativeScalar T>
 QRcomposition<T> QR_Shimit(const Matrix<T>& A)
 {
-    QRComposition<T> res;
-    res.Q = Matrix<T>::Identity(A.Cows(), A.Cows());
-    res.R = A;
-    Matrix<T> Q = Matrix<T>::Identity(A.Cows(), A.Cows());
-    for (int j = 0; j < A.Cols(); j++) {
-        Matrix<T> vk = Matrix<T>(A.Rows(), 1);
-        Matrix<T> vj = Matrix<T>(1, A.Rows());
-        for (int k = 0; k < j; k++) {
-            for (int i = 0; i < j; i++) {
-                vk(i, 0) = res.R(i, k);
-                vj(i, 0) = res.R(i, j);
-            }
-            Q(k, j) = Dot(vk, vj) / Dot(vj, vj);
+    using real_t = typename ScalarTraits<T>::real_t;
+    const int m = A.Rows();
+    const int n = A.Cols();
+    if (m == 0 || n == 0) throw std::invalid_argument("QR_Shimit: 空矩阵");
+    if (n > m)            throw std::invalid_argument("QR_Shimit: 需要 m >= n (thin QR)");
 
-            for (int i = 0; i < j; i++) {
-                res.R(i, j) = res.R(i, j) - Q(k, j) * vk(i, 0);
-            }
+    QRcomposition<T> res;
+    res.Q = Matrix<T>::Zero(m, n);     // m×n: A 各列正交化后的单位基 (原实现填的是 n×n 系数阵)
+    res.R = Matrix<T>::Zero(n, n);     // n×n: 投影系数 (上三角) + 对角范数
+    Matrix<T> V = A;                   // 工作副本; 第 j 列在循环里被逐步正交化, 原地更新
+
+    const real_t tol = DefaultTol<T>(m);
+
+    for (int j = 0; j < n; j++) {
+        for (int k = 0; k < j; k++) {
+            // r_kj = <q_k, v_j> = Σ conj(q_ik)·v_ij   (内积共轭第一个参数, D7)
+            T acc = ScalarTraits<T>::zero();
+            for (int i = 0; i < m; i++)
+                acc = acc + ScalarTraits<T>::conj(res.Q(i, k)) * V(i, j);
+            res.R(k, j) = acc;
+            for (int i = 0; i < m; i++)
+                V(i, j) = V(i, j) - acc * res.Q(i, k);
         }
-        
-        res.Q = Q * res.Q;
 
-        for (int k = 0; k < j; k++) {
-            Q(k, j) = ScalarTraits<T>::Zero();
+        real_t n2 = real_t(0);
+        for (int i = 0; i < m; i++) n2 = n2 + ScalarTraits<T>::abs2(V(i, j));
+        const real_t nrm = std::sqrt(n2);
+
+        if (nrm > tol) {
+            res.R(j, j) = ScalarTraits<T>::fromReal(nrm);          // 归一化因子落在 R 对角
+            for (int i = 0; i < m; i++)
+                res.Q(i, j) = V(i, j) * ScalarTraits<T>::fromReal(real_t(1) / nrm);
+        } else {
+            // 第 j 列与前面线性相关: R(j,j) = 0, Q 的第 j 列在正交补里任取一个方向
+            res.R(j, j) = ScalarTraits<T>::zero();
+            qr_detail::FillOrthonormalColumn(res.Q, j);
         }
     }
     return res;

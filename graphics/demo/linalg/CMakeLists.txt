@@ -29,3 +29,9 @@ target_include_directories(svd PRIVATE
     ${GRAPHICS_SRC_DIR}
 )
 add_test(NAME svd COMMAND svd)
+
+add_executable(qr qr.cpp)
+target_include_directories(qr PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME qr COMMAND qr)
