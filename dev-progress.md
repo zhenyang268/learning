@@ -20,7 +20,7 @@
 | 线 | 当前位置 | 下一个动作 |
 |---|---|---|
 | **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
-| **工程** | `graphics` 阶段 1 **收口期**：linalg **8 文件 1089 行全部落地**，且 **V1.1 的显式闸门已立**（`demo/linalg/smoke.cpp`：40 个公开入口 × {double, Complex} 各实例化一次 + 最小数值判据，**56 项 FAIL 0**）。ctest **13/13**（`scalar_traits`/`compute_graph`/**`apply`**/**`backward`**/`solve`/`inverse`/`cholesky`/`eigen`/`svd`/`qr`/`dual_complex`/`expm`/`smoke`）。**V1.1 ✔ / V1.2 ✔ / V1.3 ✔ / V1.4 ✔ / V1.5 ✔ / V1.6 ✔**（各自实测见第 3 节）。**S6 三条派支线 2026-10-16 全部定案**（`Dot` 由 smoke 收编 / `MatrixType` 用户定案挪到应用层 `demo/common.hpp` / `qr_inverse` 补回代 = S-App6 ✔）。**只剩 V1.7（纯演示，不作硬验收；用户 2026-10-16 明确「先不用管」）** | ① **V1.7 rotate demo**（可落 `demo/apps/`，随时可做）② **S7 文档收尾**（清单见 §4）③ 或直接进 **阶段 2**（V1 实质已可收口，见 §4 说明）。另：**autodiff `Apply` 的域分裂 2026-10-16 已落地**（4 重载 = Dual 专用 ×2 + 标量专用 ×2，靠部分排序分流；新增 ctest **`apply`** 17 项 FAIL 0；顺带修掉 `dual.hpp` 的 `ln`/`log` ADL 断链）—— 详见 §3 末与 §6 |
+| **工程** | `graphics` **「下一版基线」= fb0e78b + ctest 13/13（2026-10-17 03:00 定）**：阶段 1 收口期，linalg 8 文件 + autodiff（Apply 域分裂/反向模式）全部落地，V1.1–V1.6 六条验收，S6 三支线定案（`Dot`/`MatrixType`/`qr_inverse`）。**下一版目标 = 可视化 demo 期（阶段 2 收窄版）**，库侧三件 + demo 侧三刀，见 §4「下一版基线」块 | **库侧三件**（都为可视化服务）：① `quat/quaternion.hpp`（Slerp/万向锁 demo 的本体）② `operator.hpp` 扩 `LinearOperator`（`DifferentiationMatrix`/`LaplacianMatrix`——弦/鼓膜/热模糊 demo 的本体，G 系列 Python 版的对拍源）③ `classify.hpp` + `qr_inverse` 回代（收编 inverse.hpp 的 is_* 探测，V2.3/S-App6 顺手清）。**demo 侧**：lie 刀 4/5/6（expm.cpp 续写）→ D2 CLT（pyapps）→ G 系列 .py 源入 `demo/pyapps/`（图已出但源未入库） |
 | **小项目** | 未解锁 | 等 Gate A（见第 2 节） |
 | **扇面（并行，2026-10-14 起）** | 「先铺开再收束」模式启用：四扇面 + 谱枢纽，真源 = **`learning-todo/fan-plan.md`**；**2026-10-17 分层调整**：纯 Python 切片挂 **`graphics/demo/pyapps/`**（viz 层暂缓启用，绑定方案已备）；C++ 薄封装走 `graphics/plan.md` S-App 清单 | 开局三刀：① A1 弦的模态（C++ 版已出 = `demo/apps/string_modes`，Python 版挂 pyapps）② S5 expm ✅（下一刀 = lie 刀 4/5/6）③ D2 CLT 动画（pyapps）；**G 系列（球面测地线入门旋转/张量/曲率）2026-10-17 新增**，G1–G3 零依赖可开；收束判据钉死在 fan-plan §7 |
 | **李群线（扇面 A4 的展开，2026-10-15 起）** | 用 `expm` 走通「李代数→李群」：**八刀路线**，真源 = **`learning-todo/lie-plan.md`**；刀 1 = S5（主线停点，V1.6），刀 2–8 是扇面加餐。含**能/不能数值落地的分界**（表示论、根格、π₁ 标注回 `li1–li3.tex` / `Q_topology.tex`） | **刀 1/2/3 已落地**（2026-10-16：`demo/linalg/expm.cpp` 16 项判据 —— expm 本体 / `[Ji,Jj]=ε_ijk Jk` 判精确 0 / **三线对拍**（级数·谱·Rodrigues）≤1.2e-15 + 几何与 Jacobi 超强判据；V1.6 已验收）。下一步 **刀 4**：θ 扫 [0,4π] 证 exp 非单射（含 `exp(2π[u]×)=I` 已先行 · 刀 6 BCH 测阶 也是低成本下一刀） |
@@ -283,6 +283,24 @@
   §7.5 三条重新分层：**① 局部导数与种子解耦 = 硬（正确性）**；② 每算子第二份代码 = 事实但免不掉；
   ③ 伴随独立存储 = 工程取舍。用户的取舍（`adjoint` 仍用 `Matrix<Dual<U>>` 以保 `GradNode<T>`
   单模板参数）**成立**，代价只有 `MultAll` 需 `Derive(...)` 提取一次。
+
+- **V2.4 完成：`expm_pade`（[13/13] Padé + scaling）落地（代码改动 + 用例扩展；ctest 仍 13/13）**
+  —— 承接用户令「接着往下研究 expm 的拓展」。
+  - `src/linalg/expm.hpp`（54 → 125 行）：新增 `expm_pade` + `#include "linalg/solve.hpp"`。
+    与原 `expm`（Taylor + scaling 到 0.5）**并列**、互为对照基线 —— 符合本库「多条路径并列、
+    互不复用实现」的风格（同 `lu_inverse` / `cholesky_inverse` / `qr_inverse`）。
+  - **关键差异是 scaling 阈值**：Taylor 折半到 ‖As‖ ≤ 0.5；Padé [13/13] 折半到 θ₁₃ ≈ 5.372
+    ⇒ **s 少约 3 个数**（平方少 3 次）。代价是每步要解一个线性系统（`Solve`，不显式求逆）。
+  - `demo/linalg/expm.cpp` 新增 [E] 段 7 条（16 → **25 项**）：相对差 5.34e-16 / 2.52e-15 /
+    **1.54e-13（5×5, |a|≤100）** / 1.14e-15（复 4×4）；Padé→Rodrigues 1.11e-16；幂零**精确 0**。
+  - **踩坑（又一次老坑）**：第一版判据用了**绝对差** ⇒ `|a|≤100` 的 5×5 报 `1.1e+29 FAIL`，
+    那是**假警报**（元素量级是 e^‖A‖）。改相对判据后同一组只有 1.54e-13。
+    **`matrix.md` §3.6 早写过「expm 判据必须相对」，这次是没照做。**
+  - **操作事故（已修）**：`expm.cpp` 的 [E] 段被插入**两次**（同一脚本对该文件执行了两遍，
+    「读—改—写」不幂等）⇒ `redefinition of 'E_pade_vs_taylor'`、构建失败。
+    修法：`git show HEAD:<path>` 取回干净基线 → 重插一次。
+    **教训：「读—改—写」类脚本必须幂等**（插入前 `assert 目标串不存在`），否则重跑即毁。
+  - **验证**：`./run_tests.sh` **13/13**；`-c -w` **告警 0、错误 0**。
 
 ### 2026-10-16
 

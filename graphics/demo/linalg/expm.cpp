@@ -7,7 +7,8 @@
 // ---------------------------------------------------------------------------
 // 这份文件的状态
 // ---------------------------------------------------------------------------
-// 已落地: 16 项判据 (A1–A5 / B1–B4 / C1–C3 / D1–D6) 全部为真判据。
+// 已落地: 20 项判据 (A1–A5 / B1–B4 / C1–C3 / D1–D6 / E1–E4) 全部为真判据。
+//   [E] 是 V2.4: expm_pade (阶段 2 第 3 条) 与 Taylor 版互为对照基线。
 // 纪律 (matrix.md §10.9 判据先行): 阈值与"多少算对"先写在注释里, 再写代码。
 //
 // 四段的分工:
@@ -243,12 +244,57 @@ static void D_geometry_and_det()
              "[D6] exp(2π[u]×) − I < 1e-12                实测 " + Fmt(NormInf(Rp - MD::Identity(3))));
 }
 
+// ---------------------------------------------------------------------------
+// [E] V2.4: Padé 版 (expm_pade) —— 与 Taylor 版互为对照基线
+// ---------------------------------------------------------------------------
+// 判据 (V2.4 原文): expm(A) 与 Taylor 级数版差 < 1e-8。
+// **必须用相对判据**: ‖A‖ 大时元素量级是 e^{‖A‖}, 绝对差没有意义 ——
+// 实测 |a|<=100 的 5x5, 绝对差 1.1e+29 会假报 FAIL, 相对差只有 1.5e-13。
+// (老坑, 见 matrix.md §3.6「expm 判据必须相对」。)
+static void E_pade_vs_taylor()
+{
+    std::printf("\n-- [E] V2.4: Padé 版 vs Taylor 版 (相对判据) --\n");
+
+    struct Case { int n; double scale; const char* tag; };
+    const Case cases[] = {{3, 1.0, "实 3x3 |a|<=1  "}, {3, 10.0, "实 3x3 |a|<=10 "},
+                          {5, 1.0, "实 5x5 |a|<=1  "}, {5, 100.0, "实 5x5 |a|<=100"}};
+    for (const Case& c : cases) {
+        const MD A  = RandMatrix<D>(c.n, c.n, 7u, -c.scale, c.scale);
+        const MD E1 = expm(A), E2 = expm_pade(A);
+        const D rel = NormInf(E1 - E2) / NormInf(E1);
+        ck.check(rel < 1e-8,
+                 std::string("[E1] ") + c.tag + " ||Δtaylor-pade||/||E|| < 1e-8  实测 " + Fmt(rel));
+    }
+
+    {   // 复数域
+        const Matrix<C> Ac = RandMatrix<C>(4, 4, 11u, -2.0, 2.0);
+        const Matrix<C> E1 = expm(Ac), E2 = expm_pade(Ac);
+        const double rel = NormInf(E1 - E2) / NormInf(E1);
+        ck.check(rel < 1e-8, "[E2] 复 4x4 ||Δtaylor-pade||/||E|| < 1e-8          实测 " + Fmt(rel));
+    }
+
+    {   // so(3): Padé 也必须落回 Rodrigues 这条独立闭式
+        const double th = 1.3;
+        const MD K = Skew(0.6, 0.0, 0.8);
+        const MD R = MD::Identity(3) + K * std::sin(th) + (K * K) * (1.0 - std::cos(th));
+        const double d = NormInf(expm_pade(K * th) - R);
+        ck.check(d < TOL, "[E3] Padé 落回 Rodrigues 闭式 < 1e-12            实测 " + Fmt(d));
+    }
+
+    {   // 幂零: 逐位精确 (与刀 1 同一条纪律 —— 别加容差)
+        MD N(2, 2); N(0, 1) = 7.0;
+        const double d = NormInf(expm_pade(N) - (MD::Identity(2) + N));
+        ck.check(d == 0.0, "[E4] 幂零 expm_pade(N) = I+N **逐位精确**        实测 " + Fmt(d));
+    }
+}
+
 int main()
 {
-    std::printf("== V1.6 expm 验收 (刀1 本体 / 刀2 对易 / 刀3 三线对拍 / 几何+超强判据) ==\n");
+    std::printf("== V1.6 expm 验收 (刀1 本体 / 刀2 对易 / 刀3 三线对拍 / 几何+超强判据 / V2.4 Padé) ==\n");
     A_expm_basic();
     B_so3_commutator();
     C_three_way();
     D_geometry_and_det();
+    E_pade_vs_taylor();
     return CheckReport(ck.ok, ck.fail, "V1.6 expm");
 }
