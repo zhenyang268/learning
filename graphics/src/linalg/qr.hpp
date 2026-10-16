@@ -230,6 +230,9 @@ QRcomposition<T> QR_Shimit(const Matrix<T>& A)
     for (int j = 0; j < n; j++) {
         for (int k = 0; k < j; k++) {
             // r_kj = <q_k, v_j> = Σ conj(q_ik)·v_ij   (内积共轭第一个参数, D7)
+            // 这里不除 <q_k, q_k> —— Q 的每一列在**它自己那一轮**末尾已经归一化了,
+            // 所以被引用的基向量恒为单位向量, <q_k,q_k> ≡ 1, 分母被归一化吸收掉了。
+            // (若不归一化, 就得写 acc / <v_k, v_k>, 且每减一次投影都要现算一遍分母。)
             T acc = ScalarTraits<T>::zero();
             for (int i = 0; i < m; i++)
                 acc = acc + ScalarTraits<T>::conj(res.Q(i, k)) * V(i, j);

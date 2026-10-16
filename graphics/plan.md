@@ -411,6 +411,9 @@
       （`diag(1,5,3)` 实 / `diag(1,4,2)` 复）；③ **σ 不开方 → 102 条 FAIL 但「重构」0 条挂** ——
       证明 V1.4 的字面判据「重构 < 1e-8」单独抓不到 σ 算错，必须有独立判据兜底。
     - S5 `expm.hpp`（0 字节 → 落地）+ `demo/linalg/expm.cpp` → **V1.6**（so(3) 对易）
+      **（上层刀序见 `learning-todo/lie-plan.md` 的八刀路线：定义 → 李括号 → 闭式 → 非单射 →
+      SU(2) 双覆盖 → BCH → 极分解 → 幺正演化。S5 = 刀 1，本文只保留本刀的 V1.6 阈值；
+      刀 2–8 是扇面加餐，不新增 V 节点。）**
     - S6 `operator.hpp` / `qr.hpp` / `householder.hpp` 派支线处置决定 + `demo/linalg/smoke.cpp`
       （每个公开入口在 double 与 Complex 下各实例化一次 —— 同类问题防复发闸门）
     - **S6b `qr.hpp` 三函数修复（2026-10-14，用户选「三个都修」）** —— ✅ 已完成：
@@ -425,7 +428,51 @@
       （第 4 次同构的「double 免疫」）；③ MGS 内积漏 `conj` → **3 条全在 complex**（Q 酉性崩）；
       ④ 去掉相位/符号选择 → 5 条，**首轮实数域 0 条 → 暴露判据覆盖漏洞**（实数用例 x₁ 全为正）
       → 补「病态 x₁<0」用例（`[[-1,0],[1e-6,1]]` 实 / 复）后重跑，**实数域 0 → 1 条**，覆盖补上。
+    - **V1.5 `Dual<Complex>` 验收：`demo/linalg/dual_complex.cpp`（2026-10-16）** —— ✅ 已完成：
+      `demo/common.hpp` 补 `RandFill<Dual<Complex<U>>>` 特化 —— 原来复用 `RandFill<Dual<U>>`
+      写 `static_cast<U>(a)`，`U = Complex<U'>` 时 `Complex` 无单参构造/无默认参数 ⇒ 编译失败；
+      偏序上 `Dual<Complex<U>>` 更特化，两条并存即可。新增 ctest **`dual_complex`**（22 项 / FAIL 0）。
+      **V1.5 三条**：① `Matrix<Dual<Complex<double>>>` 零修改可用（含矩阵层 `d(A²) = A·A' + A'·A`）；
+      ② derive 置零时 `Solve` 的 value 与纯 Complex **精确 0**（n=2/4/6）；③ z² 单种子
+      （两种子 `derive/s` 一致 = 2z₀）/ |z|² 双种子（两方向 `derive/s` 不同、重组出 2z̄，残差 0）。
+      另加 E 段「实用形态」：解 `A(θ)x = b` 时 `dx/dθ` 由 Dual 自动传播，与解析式 −A⁻¹A₁x
+      （5.2e-18）、中心差分（6.9e-12）三方对拍 —— 这是 V1.5「为波包演化铺路」的真实形状。
+      **注入 3 条**：① `ScalarTraits<Dual<T>>::conj` 漏 `conj(derive)` → 1 条 FAIL（残差 2.0，
+      与手算一致，其余 8 用例不受影响）；② `Dual::operator*` 漏 `derive*other.value` → 4 条 FAIL
+      **全在复数域**（同时 `scalar_traits`/`compute_graph` 挂 —— 那两个测的是实数域乘法，本刀补的
+      正是复数域覆盖）；③ 把 D 段的「非全纯」换成 `z*z` → 2 条 FAIL，**暴露我自己的判据漏洞**：
+      原判据比的是**原始** `derive`，而全纯的两种子原始值也恰好不同（2z₀ vs 2z₀·i）⇒ 漏判；
+      改为比归一化后的 `derive/s` 后 2 → **3 条 FAIL**，漏洞补上。验收：ctest **9/9**。
     - S7 文档收尾：V1.1–V1.7 勾选 + dev-progress §3/§4/§6 + 记忆
+- [ ] **应用扇面（S-App 系列，2026-10-14 用户定调「先铺开再收束」）**：
+      主线顺序不变（S5 → V1.5/V1.7 → V1 收口 → 阶段 2/3），**不插入 S 序列**；
+      扇面件与主线**并行**、每件半天到一天、共用已验收的 linalg 零件。
+      规则：扇面只加 demo 与薄封装（≤ ~60 行），**不新建库文件、不新增 V 验收节点**
+      （plan 红线：验收阈值只跟主线；扇面的「验收」= demo 自身的打印/对拍断言）。
+      - [ ] **S-App1 PCA demo**（`demo/linalg/pca.cpp`）：生成二维正态点云（Box–Muller）→
+            协方差矩阵 → `eig_symmetric` 对角化 → 主轴画 ASCII 散点或导 CSV 给 matplotlib。
+            概念收获：多元正态 N(μ,Σ) 等高线=椭圆、主轴=特征向量、半轴=√λ；中心化先行。
+            数学正课仍在 C6–C10（CLT/特征函数），demo 只是几何直觉。
+      - [ ] **S-App2 牛顿法 demo**（`demo/linalg/newton.cpp`）：`jacobian` + `Solve` 拼装，
+            一个二维非线性方程组 + 收敛阶打印（探针已验：二次收敛 1.8→…→1.1e-15）。
+            概念收获：多元泰勒一阶截断 = 线性化；J 奇异时的行为。
+            正课在阶段 3 隐式积分器（van der Pol），此处见「它是什么」。
+      - [ ] **S-App3 伪逆 + 左逆右逆**（`svd.hpp` 薄封装 `Pseudoinverse(A, tol)`，~15 行）：
+            列满秩 A⁺A=I（左逆）、行满秩 AA⁺=I（右逆）、秩亏取截断 Σ⁺。
+            **数值秩判据用 `√eps·σ_max` 或 `1e-6·σ_max`，不用 `DefaultTol`**
+            （2026-10-14 探针实测：8n·eps 口径对 7×5 真秩 4 矩阵只判对 73/100，
+            √eps 口径 100/100 —— `DefaultTol` 是唯一性判据，不是数值秩判据）。
+      - [ ] **S-App4 最小二乘 `lstsq`**（`qr.hpp` 薄封装，QR 直解 R⁻¹Qᴴb，~20 行）：
+            直线/二次多项式拟合 + 残差打印。**默认 QR 不走 SVD**（本库实测：κ=1e8 时
+            正规方程爆 1e9、QR 1.3e-8、SVD 4.2e-1 —— A^H·A 路线条件数平方）。
+            κ 对比一节正是「正规方程为什么被弃用」的教科书一课。
+      - [ ] **S-App5 旋转扇面**（等 S5 expm 落地后做，天然衔接 V1.6/V2.4）：
+            Rodrigues vs `expm(t·[u]×)` 对拍（探针已验 3.3e-16）+ 欧拉角万向锁复现 +
+            四元数预演（阶段 2 正课）。概念收获：李代数=切空间线性化、exp=切空间→流形。
+      - [ ] **S-App6 `qr_inverse` 补回代**（`A⁻¹ = R⁻¹Qᴴ`，~10 行，清掉 inverse.hpp L129 的
+            throw 占位）—— 顺手件，可与任一扇面刀合并。
+      收束条件（何时回主线全时）：V1.5/V1.7 + 上述扇面全部提交后 → S7 文档收尾 →
+      **扇面清零、主线独占**，进阶段 2。扇面不做完不阻塞阶段 2（App5 依赖 S5，其余随时可插）。
 - [ ] **反向模式（`ComputationGraph::Backward` / `GradNode::Backward`）已明确标记未实现**
       （2026-10-13 改为抛 `logic_error`）：实测节点 adjoint 从未按形状初始化，
       第一个节点就抛 `Matrix dimension mismatch`，会把排查引到 Matrix 上。

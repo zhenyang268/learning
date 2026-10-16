@@ -5,7 +5,7 @@
 // 只放"怎么算对"的东西, 不放被测实现:
 //   MaxAbs2 / NormInf   元素级量度 (比较一律走 abs2, D7; 需要真实 ∞ 范数时才开方)
 //   IsApprox            ‖A - B‖∞ <= tol
-//   RandMatrix<T>       实 / 复 / Dual 随机矩阵 (定 seed, 可复现)
+//   RandMatrix<T>       实 / 复 / Dual / Dual<Complex> 随机矩阵 (定 seed, 可复现)
 //   Checker             [OK]/[FAIL] 记分板 + 末行汇总 (run_tests.sh -d 依赖这两个标记)
 //
 // 纪律 (matrix.md §10.9 第 2 条): 判据先行 —— 用例先写"多少算对", 代码对着判据写。
@@ -69,6 +69,19 @@ template <typename U> struct RandFill<Complex<U>> {
     static Complex<U> Make(double a, double b)
     {
         return Complex<U>(static_cast<U>(a), static_cast<U>(b));
+    }
+};
+// Dual<Complex>: 两个槽都填复数 (V1.5)
+// 必须单列一条 —— 复用下面的 RandFill<Dual<U>> 不行: 那里写 static_cast<U>(a),
+// U = Complex<U'> 时 Complex 没有单参构造(只有 Complex(T,T) 与 Complex()=default),
+// 实测报 no matching conversion for static_cast from 'double' to 'Complex<double>'。
+// 偏序上 Dual<Complex<U>> 比 Dual<U> 更特化, 两个都匹配时编译器优先选这条。
+template <typename U> struct RandFill<Dual<Complex<U>>> {
+    static Dual<Complex<U>> Make(double a, double b)
+    {
+        // value = Complex(a, b); derive 取同族小量 (与 Dual<U> 那条的 *0.125 同口径)
+        return Dual<Complex<U>>(Complex<U>(static_cast<U>(a), static_cast<U>(b)),
+                                Complex<U>(static_cast<U>(a * 0.125), static_cast<U>(b * 0.125)));
     }
 };
 template <typename U> struct RandFill<Dual<U>> {

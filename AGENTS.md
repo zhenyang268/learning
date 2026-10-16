@@ -1,6 +1,6 @@
 # AGENTS.md — 项目协作规约（每个 session 自动加载）
 
-> **读者**：编码 agent ｜ **最后更新**：2026-10-11
+> **读者**：编码 agent ｜ **最后更新**：2026-10-14
 > **本文是入口文件**。展开内容按下方「文档地图」**按需读取，不要一次性全读**（`learning.md` 有 43 KB）。
 
 ---
@@ -34,6 +34,11 @@
 
 用户是**非数学专业出身**（有高等数学基础）在自学数学系，目标是拿到
 **PDE 与计算机图形学所需的工程数学基础**。
+
+**目标的口径（2026-10-14 用户定）**：NS 方程只是**打开整个学习路线的钥匙**，
+用来选题与排序，**不代表这些基础不重要** —— 基础本身就是目标之一。
+因此 agent 在排期建议里不得把「暂时用不到」当成长期降低某块基础的理由；
+推迟只意味着「排到它的消费点再学」，不意味着「可以不学」。
 
 因此默认取向是：**严谨优先于速度，直觉优先于形式化。**
 特别复杂或纯技巧性的习题可以降级，但基础概念不允许含糊。
@@ -177,7 +182,9 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 ## 八、目录用途
 
 - `math-notebook/`：LaTeX 笔记（`.tex`，由 `main.tex` 统一 `\input`，已编译 `main.pdf`）
-- `graphics/`：C++ 图形/线代引擎（`src/`、`demo/` 为 ctest 测试程序、`test/`）
+- `graphics/`：C++ 图形/线代引擎（`src/` 头文件库；`demo/<模块>/` 为 ctest 验收用例，
+  一键入口 `run_tests.sh`；`demo/apps/` 为**附加区**——现象演示，不注册 ctest，用 `run_apps.sh` 跑；
+  `test/` 是早期 C 实验与 notebook，与 ctest 无关）
 - `learning-todo/`：**独立子仓**，生成产物与待办输出（`chats/`、`imgs/`、`ns-progress.md`、`matrix.md`）
 - `learning-viz/`：**独立子仓**，2026-09-22 起有提交。职责**收窄为计算/生成层**（Flask `/api/viz/*` +
   ImGui/matplotlib 本地渲染）；**不再承担笔记转换**（`notes_pipeline` 已移出）

@@ -35,3 +35,16 @@ target_include_directories(qr PRIVATE
     ${GRAPHICS_SRC_DIR}
 )
 add_test(NAME qr COMMAND qr)
+
+add_executable(dual_complex dual_complex.cpp)
+target_include_directories(dual_complex PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME dual_complex COMMAND dual_complex)
+
+# V1.6 指数映射 (lie-plan 刀 1/2/3 + 超强判据)
+add_executable(expm expm.cpp)
+target_include_directories(expm PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME expm COMMAND expm)

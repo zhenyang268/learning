@@ -18,6 +18,7 @@
 # 新增用例的做法: 在 demo/<子目录>/ 放 xxx.cpp + CMakeLists.txt
 # (照抄 demo/core/CMakeLists.txt 的 add_executable + add_test 四行),
 # 再在 demo/CMakeLists.txt 里 add_subdirectory(子目录)。本脚本自动带出。
+# 只做演示、不需要进 ctest 的程序放 demo/apps/ (附加区), 用 ./run_apps.sh 跑。
 # ---------------------------------------------------------------------------
 
 set -uo pipefail
