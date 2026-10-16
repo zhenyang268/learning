@@ -1,4 +1,4 @@
-// inverse.cpp -- linalg/inverse.hpp 验收 (S2: Inverse 分发; S2a-2: SPD 档接入)
+// inverse.cpp -- linalg/inverse.hpp 验收 (S2: Inverse 分发; S2a-2: SPD 档接入; S-App6: qr_inverse)
 //
 // 判据 (matrix.md §10.9 第 2 条: 判据先行):
 //   ① V1.2 硬指标: 随机矩阵 ‖A·A⁻¹ − I‖∞ < 1e-8, 且 ‖A⁻¹·A − I‖∞ < 1e-8
@@ -8,7 +8,9 @@
 //   ⑤ Inverse(A, hint) 与 Inverse(A) 一致 (hint 只跳过探测, 不改结果)
 //   ⑥ 异常: 奇异 / 非方阵 / 0x0
 //   ⑦ SPD 档 (S2a-2): Classify 分出 SymmetricPositiveDefinite 走 cholesky_inverse,
-//      与 LU 路径对拍 + 正定性判据 (matrix.md §3.2); QR 分支仍显式 throw (待 plan.md S6)
+//      与 LU 路径对拍 + 正定性判据 (matrix.md §3.2)
+//   ⑧ qr_inverse (S-App6, 2026-10-16): A = Q·R ⇒ A⁻¹ = R⁻¹·Qᴴ (对上三角 R 回代);
+//      残差 + 与 lu_inverse 逐元一致 + 奇异/非方阵/空矩阵 throw; double 与 Complex 各一遍
 //
 // 运行(由 CMake 注册为 ctest 用例, 也可直接执行看逐项 [OK]/[FAIL]):
 //   ./graphics/run_tests.sh             # 全量
@@ -158,8 +160,8 @@ int main()
         Matrix<D> NotSpd = {{1.0, 2.0}, {2.0, 1.0}};
         ck.check(throws([&] { (void)Inverse(NotSpd, MatrixKind::SymmetricPositiveDefinite); }),
                  "hint=SymmetricPositiveDefinite 但 A 不正定 -> throw");
-        ck.check(throws([&] { (void)qr_inverse(Matrix<D>::Identity(2)); }),
-                 "qr_inverse -> throw (qr 未接入)");
+        // qr_inverse 已于 S-App6 实现 (2026-10-16) —— 它的正确性与异常验收全部挪到 [H] 段。
+        // 这里不再断言它 throw (那是它未实现时的临时口径)。
     }
 
     // ---- G. SPD 档 (S2a-2: cholesky 接入; matrix.md §3.2 "SPD 检测 = Cholesky 不选主元能否走通") ----
@@ -230,7 +232,51 @@ int main()
                  "Inverse(SPD) 自动探测与 hint=Generic 一致");
     }
 
-    std::printf("\n最差残差: double %s | complex %s  (判据 < 1e-8)\n",
-                Fmt(worst_d).c_str(), Fmt(worst_c).c_str());
+    // ---- H. qr_inverse (S-App6): A = Q·R ⇒ A⁻¹ = R⁻¹·Qᴴ ----
+    std::printf("\n[H] qr_inverse (S-App6, 判据同 V1.2 < 1e-8)\n");
+    double worst_qr = 0.0;
+    {
+        auto throws = [](auto fn) {
+            try { fn(); return false; } catch (const std::exception&) { return true; }
+        };
+
+        // ① 随机方阵: 残差 + 与 LU 路径逐元一致 —— 两条独立实现互为判据
+        //    (只判"残差小"是不够的: A·X ≈ I 在 X 有系统性偏差时也可能近似成立,
+        //     与 lu_inverse 对拍才把"算的是同一个逆"钉住。)
+        for (int n = 2; n <= 5; n++) {
+            Matrix<D> A  = RandMatrix<D>(n, n, 500u + unsigned(n));
+            Matrix<D> Xq = qr_inverse(A);
+            Matrix<D> Xl = lu_inverse(A);
+            const double rq = double(InvResid(A, Xq));
+            const double dx = double(NormInf(Xq - Xl));
+            if (rq > worst_qr) worst_qr = rq;
+            ck.check(rq < V12_TOL && dx < 1e-10,
+                     "double n=" + std::to_string(n) + ": qr_inverse 残差 " + Fmt(rq) +
+                     " < 1e-8, 与 lu_inverse 逐元差 " + Fmt(dx) + " < 1e-10");
+        }
+
+        // ② 复数域必须单测 (D7 老坑: 漏 conj 时实数域永远 0 FAIL —— QR 里 Qᴴ 极易写成 Qᵀ)
+        {
+            Matrix<C> A  = {{C(2, 1), C(1, -3)}, {C(0, 2), C(1, 1)}};
+            Matrix<C> Xq = qr_inverse(A);
+            Matrix<C> Xl = lu_inverse(A);
+            const double rq = double(InvResid(A, Xq));
+            const double dx = double(NormInf(Xq - Xl));
+            if (rq > worst_qr) worst_qr = rq;
+            ck.check(rq < V12_TOL && dx < 1e-10,
+                     "complex 2x2: qr_inverse 残差 " + Fmt(rq) + " < 1e-8, 与 lu_inverse 逐元差 " + Fmt(dx));
+        }
+
+        // ③ 异常路径: 奇异 (R 对角出 ~0) / 非方阵 / 空矩阵
+        Matrix<D> singular = {{1.0, 2.0}, {2.0, 4.0}};
+        ck.check(throws([&] { (void)qr_inverse(singular); }), "qr_inverse 奇异矩阵 -> throw");
+        Matrix<D> rect(2, 3);
+        ck.check(throws([&] { (void)qr_inverse(rect); }), "qr_inverse 非方阵 -> throw");
+        Matrix<D> empty(0, 0);
+        ck.check(throws([&] { (void)qr_inverse(empty); }), "qr_inverse 0x0 -> throw");
+    }
+
+    std::printf("\n最差残差: double %s | complex %s | qr_inverse %s  (判据 < 1e-8)\n",
+                Fmt(worst_d).c_str(), Fmt(worst_c).c_str(), Fmt(worst_qr).c_str());
     return CheckReport(ck.ok, ck.fail, "inverse");
 }

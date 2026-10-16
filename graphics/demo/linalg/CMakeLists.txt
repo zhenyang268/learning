@@ -48,3 +48,11 @@ target_include_directories(expm PRIVATE
     ${GRAPHICS_SRC_DIR}
 )
 add_test(NAME expm COMMAND expm)
+
+# V1.1 显式闸门: 同一份 linalg 源码 x {double, Complex} 的**全入口实例化**烟测
+# (不是数值验收 —— 数值归 V1.2-V1.6; 这里判"每个公开入口都真的进过编译器")
+add_executable(smoke smoke.cpp)
+target_include_directories(smoke PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME smoke COMMAND smoke)

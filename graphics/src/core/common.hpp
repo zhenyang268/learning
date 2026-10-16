@@ -26,19 +26,6 @@ constexpr float Tol = EPSILON;
 constexpr double Tol_D = EPSILON_D;
 
 
-// 不能按用途去分, 怎么用是上层的责任, 可以提供静态工厂辅助生成
-enum class MatrixType
-{
-    General,                // 通用矩阵
-    Rotation,               // 旋转矩阵
-    Scale,                  // 缩放矩阵
-    Translation,            // 平移矩阵
-    RigidTransform,         // 刚体变换, 旋转平移
-    Projection,             // 投影矩阵
-    IllConditioned,         // 病态矩阵
-    SymmetricPositive,      // 对称正定矩阵
-};
-
 enum class MatrixKind 
 { 
     Generic,

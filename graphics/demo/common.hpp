@@ -23,6 +23,20 @@
 #include <string>
 #include <type_traits>
 
+
+// 不能按用途去分, 怎么用是上层的责任, 从顶层common挪到应用层
+enum class MatrixType
+{
+    General,                // 通用矩阵
+    Rotation,               // 旋转矩阵
+    Scale,                  // 缩放矩阵
+    Translation,            // 平移矩阵
+    RigidTransform,         // 刚体变换, 旋转平移
+    Projection,             // 投影矩阵
+    IllConditioned,         // 病态矩阵
+    SymmetricPositive,      // 对称正定矩阵
+};
+
 // ---- 元素级量度 -----------------------------------------------------------
 
 // max |a_ij|^2: 比较用这个 (免开方, 阈值取 tol^2 即等价于 ‖·‖∞ <= tol)

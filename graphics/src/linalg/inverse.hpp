@@ -9,6 +9,9 @@
 //   LUResult{L,U,piv} / LU(A) / Solve(A,b) 解 A·x = b, 教科书列向量约定, D19 修订版
 #include "linalg/cholesky.hpp" // cholesky / cholesky_solve (S2a 已落地, 2026-10-14)
 //   SPD 判据 = "Cholesky 不选主元能否走通" (matrix.md §3.2) —— 本文件只做分发, 不重复实现分解
+#include "linalg/qr.hpp"       // QR_Householder (S6b 已落地) —— qr_inverse 走 A^{-1} = R^{-1}·Q^H
+//   qr.hpp 只 include core/* + operator.hpp, **不反向依赖本文件**, 故无循环。
+//   (eigen.hpp 反过来 include 本文件, 于是顺序是 core -> solve/cholesky/qr -> inverse -> eigen。)
 
 // ---- 结构探测: 每个判断是一次数学练习 (matrix.md §3.2) ----
 // D7: 比较用 abs2, 共轭用 conj, 算法层零分支; D12: 容差 tol 由调用方给
@@ -89,7 +92,7 @@ MatrixKind Classify(const Matrix<T>& A, typename ScalarTraits<T>::real_t tol)
 // 探测顺序: Diagonal -> Orthogonal -> Symmetric{ -> SPD } -> Generic
 // Diagonal 排在 SPD 之前是有意的: 对角矩阵即使正定也走 Diagonal(逐元倒数更省)。
 
-// ---- 各分支专用求逆 (未接入 qr 的分支显式 throw, 不留静默 no-op) ----
+// ---- 各分支专用求逆 (五个结构各一条路径; 近奇异/非正定在各自内部 throw, 不留静默 no-op) ----
 template <CommutativeScalar T>
 Matrix<T> lu_inverse(const Matrix<T>& A)
 {
@@ -125,12 +128,36 @@ Matrix<T> cholesky_inverse(const Matrix<T>& A)
     return cholesky_solve(A, Matrix<T>::Identity(A.Rows()));   // A 非正定在此 throw (D12)
 }
 
-// A = Q·R, A^{-1} = R^{-1}·Q^H   —— 依赖 qr.hpp (plan.md S6)
+// A = Q·R (thin; 方阵时 Q、R 都是 n×n), A^{-1} = R^{-1}·Q^H。
+// 只做两件**已有**的事: ① Householder QR (qr.hpp) ② 对上三角 R 的一次回代 (R·X = I ⇒ X = R^{-1})。
+// 不写成 Solve(R, I): R 本身已经上三角, 再走一遍 LU 等于把 O(n³) 又花一遍;
+// 也不显式求 R^{-1} 再去乘 —— 回代逐列解出 X 就是同一件事的紧凑写法 (与 qr.hpp 自带注释同口径)。
+// 奇异判据沿用 lu_inverse / diagonal_inverse 的口径: |R_ii| <= tol ⇒ 抛 (D12)。
+// 注意它**不接矩阵分发**: MatrixKind 里没有 QR 档 (也不该有 —— QR 是算法不是结构),
+// 所以本函数与 lu_inverse / cholesky_inverse 并列, 是一条"显式点名"的独立路径。
 template <CommutativeScalar T>
 Matrix<T> qr_inverse(const Matrix<T>& A)
 {
-    (void)A;
-    throw std::logic_error("qr_inverse: 未实现 (依赖 qr.hpp, 见 plan.md S6)");
+    if (A.Rows() != A.Cols() || A.Rows() == 0)
+        throw std::invalid_argument("qr_inverse: A 必须是非空方阵");
+
+    const int n = A.Rows();
+    const QRcomposition<T> qr = QR_Householder(A);      // m >= n 由方阵保证
+    const typename ScalarTraits<T>::real_t tol = DefaultTol<T>(n);
+
+    Matrix<T> X = Matrix<T>::Identity(n);               // 右端项 B = I, 原地被解成 R^{-1}
+    for (int i = n - 1; i >= 0; i--) {
+        if (ScalarTraits<T>::abs2(qr.R(i, i)) <= tol * tol)
+            throw std::runtime_error("qr_inverse: R 对角元近奇异 (秩亏或近奇异, 判据 |R_ii| <= tol)");
+        const T inv_diag = ScalarTraits<T>::one() / qr.R(i, i);
+        for (int j = 0; j < n; j++) {
+            T acc = X(i, j);                            // 此刻第 i 行还是单位阵的 δ_ij, 当右端项用
+            for (int k = i + 1; k < n; k++)
+                acc = acc - qr.R(i, k) * X(k, j);       // k > i 的行已回代完, 可直接引用
+            X(i, j) = acc * inv_diag;
+        }
+    }
+    return X * qr.Q.Adjoint();                          // R^{-1}·Q^H
 }
 
 // ---- 对外入口 (matrix.md §3.2 枚举分发) ----
