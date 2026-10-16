@@ -2,10 +2,19 @@
 
 #include <cmath>
 #include <functional>
+#include <type_traits>
 #include <vector>
 #include <map>
 #include "core/common.hpp"
 #include "core/scalar_traits.hpp"
+
+// 域判别: IsDual<Dual<U>> = true, 其余 (double / float / Complex<...>) false。
+// 用途 —— `Apply` 的重载分裂 (见 jacobian.hpp): Dual 专用版与标量版共存时, 靠
+// [temp.deduct.partial] 部分排序把 Dual 域分流到 Dual 版; 本 trait 是标量版体内的
+// 守卫 `static_assert(!IsDual<T>::value, ...)` —— 一旦偏序选错, 立刻编不过而不是静默走错路。
+template <typename T> class Dual;                       // 前置声明, 供下面的特化用
+template <typename T> struct IsDual : std::false_type {};
+template <typename U> struct IsDual<Dual<U>> : std::true_type {};
 
 template <typename T>
 class Dual
@@ -85,6 +94,14 @@ public:
         using std::log;
         return Dual(log(x.value), x.derive / x.value);
     }
+
+    // ln 与 log 在 Dual 域绑成同一个函数 —— 这不是便利别名, 是**修 ADL 断链**:
+    // 标量域与 Complex 域的函数名都是 log, 本类却只有 ln, 而上面 ln 的体内写的是
+    // `log(x.value)` (依赖调用 ⇒ 名字查找 = 定义点普通查找 + 实例化点 ADL)。
+    // 当 T = Dual<U> (嵌套对偶 = 二阶导) 时 `x.value` 的类型是 Dual<U>, ADL 只会去找
+    // Dual<U> 的友元 —— 它只有 ln、没有 log ⇒ `error: no matching function for call to
+    // 'log'` (2026-10-16 实测, dual.hpp:86)。pow 的体内同样用了 log, 一并受益。
+    friend Dual log(const Dual& x) { return ln(x); }
 
     // x ^ y 也支持 x ^ n
     friend Dual pow(const Dual &x, const Dual &y)

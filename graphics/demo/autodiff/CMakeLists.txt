@@ -8,3 +8,19 @@ target_include_directories(compute_graph PRIVATE
 
 # 注册为 ctest 测试用例
 add_test(NAME compute_graph COMMAND compute_graph)
+
+# Apply 的域分裂验收 (2026-10-16): 4 个重载 x 4 个域 + Function/MatrixFunction 节点
+# + 嵌套对偶 Dual<Dual<T>> 的二阶导 (修 dual.hpp 的 log ADL 断链)
+add_executable(apply apply.cpp)
+target_include_directories(apply PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME apply COMMAND apply)
+
+# 反向模式最小可用验收 (2026-10-17): 最小闭环三方对拍 + 12 个可用算子的伴随公式
+# + adjoint 自动初始化 + 幂等; 占位算子如实断言"仍不可用"
+add_executable(backward backward.cpp)
+target_include_directories(backward PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME backward COMMAND backward)

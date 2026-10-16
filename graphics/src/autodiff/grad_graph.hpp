@@ -241,8 +241,19 @@ public:
          * adjoint只使用value, 不用derive, 加上traits分离太麻烦
          */
         switch (op) {
+            // ---- 叶子与常量: 无下游可传 (显式列出, 也为消 -Wswitch) ----
+            case GradOp::Input:
+            case GradOp::Constant:
+                break;
+
             case GradOp::CrossEntropy:
                 break;
+
+            // ---- 透传节点: 伴随原样交给输入 ----
+            case GradOp::Output:
+                node1->adjoint += adjoint;
+                break;
+
             case GradOp::Add:
                 adjoint1 = Matrix<T>::Ones(node1->matrix.Rows(),
                                            node1->matrix.Cols());
@@ -260,6 +271,9 @@ public:
                 node1->adjoint += adjoint1.cwiseProduct(adjoint);
                 node2->adjoint += adjoint2.cwiseProduct(adjoint);
                 break;
+            // Mult 与 CWiseMult 同义 (Forward 里就是同一个 cwiseProduct) ——
+            // 原先 Backward 只写了 CWiseMult, 于是 `Mult` 节点反向**静默 no-op**。
+            case GradOp::Mult:
             case GradOp::CWiseMult:
                 // y = A cwiseproduct X
                 // 逐元素乘法, a_x = a_y cwiseproduct A
@@ -278,7 +292,8 @@ public:
                 node2->adjoint += node1->matrix.Transpose() * adjoint;
                 break;
             case GradOp::Divide:
-                node1->adjoint += adjoint * node2->matrix.Transpose();
+                // 逐元素除法: ∂(x1/x2)/∂x1 = 1/x2 ⇒ 逐元素除, 不是矩阵乘
+                node1->adjoint += adjoint.cwiseDivision(node2->matrix);
                 adjoint2 = Matrix<T>::Ones(node2->matrix.Rows(),
                                            node2->matrix.Cols())
                                * (-ScalarTraits<T>::one());
@@ -287,7 +302,9 @@ public:
                                       .cwiseDivision(node2->matrix);
                 break;
             case GradOp::Transpose:
-                node1->adjoint = node1->matrix.Transpose();
+                // 原式 `node1->adjoint = node1->matrix.Transpose()` 两头都错:
+                // 既用原值 (而非上游伴随) 又用 `=` 覆盖 (而非累加)。
+                node1->adjoint += adjoint.Transpose();
                 break;
 
             // a_x = - Y^T * a_y * Y^T
@@ -315,17 +332,25 @@ public:
 
             // a_x = J * a_y, Jij是除xij的累乘
             case GradOp::MultAll:
-                adjoint1 = MultAllBackward(node1->matrix);
-                node1->adjoint += adjoint1.cwiseProduct(adjoint);
+                // MultAllBackward 返回的 Dual 把「总积」放在 value、∂总积/∂x_i 放在 derive,
+                // 故必须先 Derive 把偏导提到 value 分量, 再与上游伴随逐元素乘。
+                adjoint1 = Derive(MultAllBackward(node1->matrix));
+                // MultAll 的输出恒为 1x1 ⇒ 上游伴随是**标量**, 这里是「标量乘向量」而非逐元素乘
+                node1->adjoint += adjoint1 * adjoint[0][0];
                 break;
             case GradOp::LnMultAll:
                 break;
+
+            case GradOp::CWisePow:
+                throw std::logic_error("CWisePow::Backward: 未实现 (Forward 亦未实现)");
             
+            // 逐元素函数的雅可比是对角阵 (注释里本来就写着) ⇒ 必须**逐元素乘**;
+            // 且局部导数要用 LocalDeriv (与种子无关), 不能拿 Apply 的 derive (= f'(x)·种子)。
             case GradOp::Function:
-                node1->adjoint += adjoint * Derive(Apply(node1->matrix, matrixF[0][0]));
+                node1->adjoint += adjoint.cwiseProduct(LocalDeriv(node1->matrix, matrixF[0][0]));
                 break;
             case GradOp::MatrixFunction:
-                node1->adjoint += adjoint * Derive(Apply(node1->matrix, matrixF));
+                node1->adjoint += adjoint.cwiseProduct(LocalDeriv(node1->matrix, matrixF));
                 break;
         }
     }
@@ -399,12 +424,32 @@ public:
 
     void Backward()
     {
-        // 反向模式未实现, 这里明确拒绝执行 —— 别"先跑跑看":
-        // 节点的 adjoint 从来没有按形状初始化(默认 0x0), 第一个节点就会抛
-        // Matrix dimension mismatch, 报错信息还会把人误导到 Matrix 上去(实测复现)。
-        // 按 matrix.md 7.5, 反向模式要另起 tape 设计(立项条件: 叶子多 + 要全梯度 +
-        // 标量链), 本基线只覆盖 forward-mode。GradNode::Backward 是那之前的草稿, 未验证。
-        // backward_list(拓扑逆序)的构造保留, 供将来 tape 版复用。
-        throw std::logic_error("ComputationGraph::Backward: 反向模式未实现 (见 matrix.md 7.5)");
+        Backward(Matrix<T>());      // 默认播种: 输出伴随填全 1 (= ∂Σy/∂y)
+    }
+
+    // seed: 输出节点的伴随初值 (形状须与 output->matrix 一致); 传 0x0 表示用全 1
+    void Backward(const Matrix<T>& seed)
+    {
+        // (1) 形状初始化 —— 这正是原版"一跑就抛"的根因:
+        //     adjoint 默认 0x0, 而下面所有分支都写 `node->adjoint += ...`, 形状不匹配必抛。
+        //     Forward 已跑过 ⇒ 各节点 matrix 形状已定, 按它重建即可 (顺带清零)。
+        for (auto& node : forward_list) {
+            node->adjoint = Matrix<T>(node->matrix.Rows(), node->matrix.Cols());
+        }
+
+        // (2) 输出节点播种
+        if (output->matrix.Size() > 0) {
+            if (seed.Size() == output->matrix.Size()) {
+                output->adjoint = seed;
+            } else {
+                output->adjoint = Matrix<T>::Ones(output->matrix.Rows(),
+                                                  output->matrix.Cols());
+            }
+        }
+
+        // (3) 拓扑逆序逐节点回传
+        for (auto& node : backward_list) {
+            node->Backward();
+        }
     }
 };

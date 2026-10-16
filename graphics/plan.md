@@ -1,6 +1,6 @@
 # plan.md — 数学 × 图形学 学习实施计划
 
-> **读者**：agent（执行工程任务）+ 人 ｜ **最后更新**：2026-09-22
+> **读者**：agent（执行工程任务）+ 人 ｜ **最后更新**：2026-10-16
 >
 > **真源声明**
 > - 本文只管**任务定义与验收阈值**，**不记录任何状态**（不勾选、不写「进行中」）。
@@ -416,6 +416,10 @@
       刀 2–8 是扇面加餐，不新增 V 节点。）**
     - S6 `operator.hpp` / `qr.hpp` / `householder.hpp` 派支线处置决定 + `demo/linalg/smoke.cpp`
       （每个公开入口在 double 与 Complex 下各实例化一次 —— 同类问题防复发闸门）
+      → **✅ 2026-10-16 全部完成**。`smoke.cpp` 见下 V1.1 条；三条派支线定案 ——
+      `Dot` 由 smoke 收编（不再零调用方）、`MatrixType` **用户定案：挪到应用层 `demo/common.hpp`**
+      （它按用途划分，「怎么用是上层的责任」；core 只留按**代数结构**分的 `MatrixKind`）、
+      `qr_inverse` 补回代（= S-App6 ✅）。
     - **S6b `qr.hpp` 三函数修复（2026-10-14，用户选「三个都修」）** —— ✅ 已完成：
       `operator.hpp` 的 `Dot`/`Abs2` 修正 + `qr.hpp` 编译层 9 处 + **三个函数算法层重写**
       （householder：分母/相位/`Adjoint`；givens：循环结构反了 + 堆越界；shimit：重写为 MGS）。
@@ -443,6 +447,20 @@
       正是复数域覆盖）；③ 把 D 段的「非全纯」换成 `z*z` → 2 条 FAIL，**暴露我自己的判据漏洞**：
       原判据比的是**原始** `derive`，而全纯的两种子原始值也恰好不同（2z₀ vs 2z₀·i）⇒ 漏判；
       改为比归一化后的 `derive/s` 后 2 → **3 条 FAIL**，漏洞补上。验收：ctest **9/9**。
+    - **V1.1 显式闸门：`demo/linalg/smoke.cpp`（2026-10-16）** —— ✅ 已完成：
+      V1.1 要的不是「某个入口算得对」（那是 V1.2–V1.6 各自的事），而是
+      「**每个公开入口都在 double 与 Complex 下各实例化过一次**」。两段：
+      **[A] 实例化闸门**对 **40 个公开入口**（27 自由函数 + 13 个 `Matrix<T>` 成员，
+      `Inverse` 两个重载须 `static_cast` 消歧）**取函数指针**（odr-use ⇒ 强制实例化）、
+      刻意不调用，配 `kEntryCount = 40` 计数（漏抄一行即报警）；**[B] 最小数值闸门**
+      每个入口跑一次 + 一条轻量判据（阈值 1e-10，专项用例才是权威）。
+      验收：ctest **`smoke`**，**54 项 / FAIL 0**，`-c -w` 从零 + `-Wall -Wextra` **0 告警**。
+      **注入反例两条**（本条最值钱的证据）：① `Dot` 去掉 `conj` → **全项目只有 smoke 挂**
+      （1 条，complex，残差 2.048e-01），其余 10 个用例全绿（`Dot` 此前零调用方，旧体系看不见）；
+      ② 往 `Dot` 体内写只在实例化时非法的表达式 → **只 include 的探针编得过**、
+      **其余 10 个 target 照常构建**，只有 `smoke.cpp` 编不过 —— 两面钉死「include ≠ 实例化」。
+      副产物：`Dot` 从此有了第一个调用方（不再零调用方）；`qr_inverse` 当日随后补上回代（S-App6 ✅），
+      闸门里「如实断言它 throw」的临时判据随之换成数值判据 [B6d] + 奇异抛 [B6e]。
     - S7 文档收尾：V1.1–V1.7 勾选 + dev-progress §3/§4/§6 + 记忆
 - [ ] **应用扇面（S-App 系列，2026-10-14 用户定调「先铺开再收束」）**：
       主线顺序不变（S5 → V1.5/V1.7 → V1 收口 → 阶段 2/3），**不插入 S 序列**；
@@ -469,15 +487,47 @@
       - [ ] **S-App5 旋转扇面**（等 S5 expm 落地后做，天然衔接 V1.6/V2.4）：
             Rodrigues vs `expm(t·[u]×)` 对拍（探针已验 3.3e-16）+ 欧拉角万向锁复现 +
             四元数预演（阶段 2 正课）。概念收获：李代数=切空间线性化、exp=切空间→流形。
-      - [ ] **S-App6 `qr_inverse` 补回代**（`A⁻¹ = R⁻¹Qᴴ`，~10 行，清掉 inverse.hpp L129 的
-            throw 占位）—— 顺手件，可与任一扇面刀合并。
+      - [x] **S-App6 `qr_inverse` 补回代** —— ✅ 2026-10-16 完成（`inverse.hpp`，~25 行含注释）：
+            `A = Q·R ⇒ A⁻¹ = R⁻¹Qᴴ`；R 已是上三角，**直接回代**求 R⁻¹（不复用 LU、不显式求逆），
+            奇异判据 `|R_ii| ≤ DefaultTol` 抛。验收：`inverse` 用例 **[H] 段**（+8 项 → 85 项 FAIL 0）
+            + `smoke` **[B6d/B6e]**。实测残差 double ≤ **1.11e-15** / complex **2.48e-16**，
+            与 `lu_inverse` 逐元差 ≤ **6.2e-15**。注入「`Qᴴ`→`Qᵀ`」→ **只挂复数域**（第 5 次 double 免疫）。
       收束条件（何时回主线全时）：V1.5/V1.7 + 上述扇面全部提交后 → S7 文档收尾 →
       **扇面清零、主线独占**，进阶段 2。扇面不做完不阻塞阶段 2（App5 依赖 S5，其余随时可插）。
-- [ ] **反向模式（`ComputationGraph::Backward` / `GradNode::Backward`）已明确标记未实现**
-      （2026-10-13 改为抛 `logic_error`）：实测节点 adjoint 从未按形状初始化，
-      第一个节点就抛 `Matrix dimension mismatch`，会把排查引到 Matrix 上。
-      按 `matrix.md` §7.5，反向模式要另起 tape 设计（先设计后动码），
-      `GradNode::Backward` 是那之前的草稿、未验证 —— 本题**不是 bug，是待立项功能**。
+- [x] **✅ 反向模式（`ComputationGraph::Backward` / `GradNode::Backward`）已落地**（2026-10-17）：
+      上一版（2026-10-13）把它标成「待立项功能、非 bug」是**判断错了** —— 实测发现那 130 行不是
+      「草稿未验证」，而是**有 4 类确定性 bug**（22 个 GradOp 里只有 5 个伴随公式正确）：
+      ① `case Mult` / `case Output` **缺失** ⇒ 静默 no-op（Forward 里 Mult ≡ CWiseMult，
+      但 Backward 只写了 CWiseMult）；② `case Transpose` 用 `node1->matrix` 而非上游伴随、且用
+      `=` 而非 `+=`；③ `case Divide` / `Function` / `MatrixFunction` 把**逐元素**写成**矩阵乘**；
+      ④ `case MultAll` 维度不匹配 + 偏导藏在 Dual 的 `derive` 分量里没提取。
+      更根本的是 `adjoint` **从不按形状初始化** ⇒ 第一个节点就抛 `Matrix dimension mismatch`
+      —— 所以 `ComputationGraph::Backward` 的 `throw` 是「知情拒绝」，但既然知道了就该初始化。
+      **现修**：`ComputationGraph::Backward()` 做「形状初始化 → 输出播种 → 拓扑逆序回传」，
+      并补 5 个 case（`-Wswitch` 归零）＋ 修上述 4 处公式 ＋ `jacobian.hpp` 加
+      `localFunc`/`LocalDeriv`（局部导数**与种子解耦**：`Derive(Apply(...))` 得到的是
+      f'(x)·种子，不是 f'(x)）。**新增 ctest `backward`（29 项，含最小闭环三方对拍）**。
+      **仍未动**：8 个 `throw` 占位（CWisePow/Inverse/Sigmoid/Relu/Tanh/Softmax/CrossEntropy/
+      LnMultAll）与 4 个激活函数的**空 body** Backward（`[E3]` 已如实断言它仍静默 0）。
+      **关于 tape**：§7.5 第 4 条的「独立文件」仍是终态方向，但**不是现在必须做** ——
+      「顺手存局部导数」是工程惯例（省一次 O(n) 计算），不是正确性要求；
+      本架构 `shared_ptr` 持有 `matrix` ⇒ 中间量一直在 ⇒ 永远可重算。
+      详见 `dev-progress.md` §6 的 2026-10-17 条。
 - [x] `notebook/` 文件名两处拼写问题**已于 2026-09-22 修正**：
   `B_algbra.tex` → `B_algebra.tex`、`M_addtion.tex` → `M_addition.tex`（`main.tex` 的 `\input` 已同步）。
 - [ ] `§NN.N` 是编译后全局编号，**插入新 `.tex` 就会整体位移** —— 文档引用优先用文件内编号（`B1`、`G1.1`）。
+- [x] **✅ autodiff：`Apply` 的域契约已写进签名**（2026-10-16 落地，用户令「你改吧」）：
+      按域拆成 **4 个重载** —— Dual 专用 ×2（签名 `Matrix<Dual<T>>`，走 `dualFunc`）
+      + 标量专用 ×2（签名 `Matrix<T>`，走新增的 `elemFunc`）。两者共存靠
+      [temp.deduct.partial] **部分排序**分流（`Matrix<Dual<U>>` 比 `Matrix<T>` 更特化，
+      标准行为、非编译器扩展）；标量版体内 `static_assert(!IsDual<T>::value, ...)` 作守卫
+      （域判别 trait `IsDual` 落在 `dual.hpp`）。原报错
+      `error: use of undeclared identifier 'dualFunc'` 的根因是 `dualFunc` 为 `Dual` 的
+      **in-class friend**（ADL-only、无法前置声明），而签名贪心写成了任意 `Matrix<T>`。
+      **新增 ctest `apply`**（`demo/autodiff/apply.cpp`，17 项 FAIL 0）：4 重载 × 4 域
+      （double / Complex / Dual / Dual&lt;Complex&gt;）+ `GradOp::Function` / `MatrixFunction`
+      节点真实路径（此前**从未跑过**）+ 嵌套对偶二阶导 + 维度不匹配 throw。
+      **顺带修** `dual.hpp` 的 `ln`/`log` ADL 断链（`ln` 体内用 `log`、而友元叫 `ln` ⇒
+      嵌套对偶 = 二阶导时 `no matching function for call to 'log'`）。
+      四条注入对照（含偏序证据）见 `dev-progress.md` §6 的 2026-10-16 条。
+      **验证**：ctest **12/12**、`-c -w`（从零 + `-Wall -Wextra`）0 告警。**已了结。**

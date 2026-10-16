@@ -15,15 +15,15 @@
 
 ## 0. 当前指针（每次会话先看这里）
 
-> **数学线在 L1（测度与积分）中段；工程线在 `graphics` 阶段 1 收口期 —— linalg 8 文件全部落地并进编译器，ctest 9/9，V1.2/V1.3/V1.4/V1.5 已验收，剩 V1.1/V1.6/V1.7 三条（见第 3 节）。**
+> **数学线在 L1（测度与积分）中段；工程线在 `graphics` 阶段 1 收口期 —— linalg 8 文件全部落地、每个公开入口都在 double 与 Complex 下实例化过（ctest **13/13**，含 autodiff 的 `apply` / `backward`），V1.1/V1.2/V1.3/V1.4/V1.5/V1.6 六条已验收，**只剩 V1.7（纯演示，用户已定「先不管」）**（见第 3 节）。**
 
 | 线 | 当前位置 | 下一个动作 |
 |---|---|---|
 | **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
-| **工程** | `graphics` 阶段 1 **收口期**：linalg **8 文件 1062 行全部落地且都已进编译器**，ctest **8/8**（`scalar_traits`/`compute_graph`/`solve`/`inverse`/`cholesky`/`eigen`/`svd`/`qr`）。**V1.2 ✔ / V1.3 ✔ / V1.4 ✔**（`inverse` 78 项 · `eigen` 119 项 · `svd` 266 项）；`expm.hpp` **2026-10-15 落地**（S5 刀 1，三域 `-Wall -Wextra` 0 告警，**尚未进 ctest**）。**剩：V1.1（实质满足、缺显式烟测闸门）/ V1.5（`Matrix<Dual<Complex<double>>>` 从未被实例化过）/ V1.6（缺 `demo/linalg/expm.cpp`）/ V1.7（未做）** | ① **V1.5 用例** `demo/linalg/dual_complex.cpp` ② **V1.6 demo**（`expm` + so(3) **三线对拍**，与 `lie-plan.md` 刀 2/3 是同一件活）③ **S6 编译烟测** `demo/linalg/smoke.cpp` + 支线定案（`householder.hpp` 已删待提交、`MatrixType` 孤儿、`Dot` 无调用方）④ V1.7 + **S7 文档收尾**（清单见 §4） |
+| **工程** | `graphics` 阶段 1 **收口期**：linalg **8 文件 1089 行全部落地**，且 **V1.1 的显式闸门已立**（`demo/linalg/smoke.cpp`：40 个公开入口 × {double, Complex} 各实例化一次 + 最小数值判据，**56 项 FAIL 0**）。ctest **13/13**（`scalar_traits`/`compute_graph`/**`apply`**/**`backward`**/`solve`/`inverse`/`cholesky`/`eigen`/`svd`/`qr`/`dual_complex`/`expm`/`smoke`）。**V1.1 ✔ / V1.2 ✔ / V1.3 ✔ / V1.4 ✔ / V1.5 ✔ / V1.6 ✔**（各自实测见第 3 节）。**S6 三条派支线 2026-10-16 全部定案**（`Dot` 由 smoke 收编 / `MatrixType` 用户定案挪到应用层 `demo/common.hpp` / `qr_inverse` 补回代 = S-App6 ✔）。**只剩 V1.7（纯演示，不作硬验收；用户 2026-10-16 明确「先不用管」）** | ① **V1.7 rotate demo**（可落 `demo/apps/`，随时可做）② **S7 文档收尾**（清单见 §4）③ 或直接进 **阶段 2**（V1 实质已可收口，见 §4 说明）。另：**autodiff `Apply` 的域分裂 2026-10-16 已落地**（4 重载 = Dual 专用 ×2 + 标量专用 ×2，靠部分排序分流；新增 ctest **`apply`** 17 项 FAIL 0；顺带修掉 `dual.hpp` 的 `ln`/`log` ADL 断链）—— 详见 §3 末与 §6 |
 | **小项目** | 未解锁 | 等 Gate A（见第 2 节） |
-| **扇面（并行，2026-10-14 起）** | 「先铺开再收束」模式启用：四扇面 + 谱枢纽，真源 = **`learning-todo/fan-plan.md`**；Python 切片落 `learning-viz/python/viz_modules/`（matplotlib 出图存 `learning-todo/imgs/`），C++ 薄封装走 `graphics/plan.md` S-App 清单 | 开局三刀：① **A1 弦的模态**（C++ 版已出 = `demo/apps/string_modes`，Python 版未做）② **S5 expm**（✅ 2026-10-15 落地）③ **D2 CLT 动画**（未做）。收束判据钉死在 fan-plan §7 |
-| **李群线（扇面 A4 的展开，2026-10-15 起）** | 用 `expm` 走通「李代数→李群」：**八刀路线**，真源 = **`learning-todo/lie-plan.md`**；刀 1 = S5（主线停点，V1.6），刀 2–8 是扇面加餐。含**能/不能数值落地的分界**（表示论、根格、π₁ 标注回 `li1–li3.tex` / `Q_topology.tex`） | **刀 1 已落地**（2026-10-15：`expm.hpp` 54 行 = Taylor + scaling-and-squaring；基础段全过、注入对照已做，但**未写 demo / 未进 ctest**，故 V1.6 未验收）。下一步 **刀 2/3**：so(3) 三基 + 对易子 + `exp(θ[u]×)` vs Rodrigues **三线对拍** —— 与 V1.6 demo 是同一件活，合并做 |
+| **扇面（并行，2026-10-14 起）** | 「先铺开再收束」模式启用：四扇面 + 谱枢纽，真源 = **`learning-todo/fan-plan.md`**；**2026-10-17 分层调整**：纯 Python 切片挂 **`graphics/demo/pyapps/`**（viz 层暂缓启用，绑定方案已备）；C++ 薄封装走 `graphics/plan.md` S-App 清单 | 开局三刀：① A1 弦的模态（C++ 版已出 = `demo/apps/string_modes`，Python 版挂 pyapps）② S5 expm ✅（下一刀 = lie 刀 4/5/6）③ D2 CLT 动画（pyapps）；**G 系列（球面测地线入门旋转/张量/曲率）2026-10-17 新增**，G1–G3 零依赖可开；收束判据钉死在 fan-plan §7 |
+| **李群线（扇面 A4 的展开，2026-10-15 起）** | 用 `expm` 走通「李代数→李群」：**八刀路线**，真源 = **`learning-todo/lie-plan.md`**；刀 1 = S5（主线停点，V1.6），刀 2–8 是扇面加餐。含**能/不能数值落地的分界**（表示论、根格、π₁ 标注回 `li1–li3.tex` / `Q_topology.tex`） | **刀 1/2/3 已落地**（2026-10-16：`demo/linalg/expm.cpp` 16 项判据 —— expm 本体 / `[Ji,Jj]=ε_ijk Jk` 判精确 0 / **三线对拍**（级数·谱·Rodrigues）≤1.2e-15 + 几何与 Jacobi 超强判据；V1.6 已验收）。下一步 **刀 4**：θ 扫 [0,4π] 证 exp 非单射（含 `exp(2π[u]×)=I` 已先行 · 刀 6 BCH 测阶 也是低成本下一刀） |
 | **笔记 web 化** | `learning-web` 已落**规约 + 设计 + 目录骨架**（`AGENTS.md` / `DESIGN.md` / `build/` / `graph/`），实现未开工 | 按 `learning-web/AGENTS.md` §12 第 1 步：`uv add --dev pypandoc-binary` |
 
 > **2026-09-22 修正**：本表原先写「L1 第 3 关 —— 外测度已学、勒贝格积分刚学」，
@@ -59,52 +59,80 @@
 ## 3. 现状明细（截至 2026-10-15）
 
 - **数学线**：**只以 `learning-todo/ns-progress.md` 为准**，本文不重复关卡明细。
-- **工程线**（`graphics`，分支 `graphics_0`；2026-10-15 实地盘点）：
+- **工程线**（`graphics`，分支 `graphics_0`；2026-10-17 实地盘点到 ctest 13/13）：
 
-  **linalg 已全部落地、且每个文件都真的进过编译器** —— 2026-10-14 那次「528 行从未被任何 TU
-  include」的体检问题，已随 S1–S6b 全部修复；当时 32 个编译错误的逐条明细保留在 §6 的
+  **linalg 已全部落地、且每个公开入口都真的进过编译器** —— 2026-10-14 那次「528 行从未被任何 TU
+  include」的体检问题，已随 S1–S6 全部修复；当时 32 个编译错误的逐条明细保留在 §6 的
   2026-10-14 条，本节只保留结果：
 
   | 文件 | 行数 | 验收用例 | 状态 |
   |---|---|---|---|
-  | `operator.hpp` | 40 | 无独立用例（`Abs2` 被 `expm.hpp` / `qr.hpp` 使用；`Dot` **零调用方**） | ⚠️ 待 S6 处置 |
-  | `expm.hpp` | 54 | **无** | ⚠️ S5 刀 1 已落地，**未进 ctest** |
+  | `operator.hpp` | 40 | `smoke`（`Dot` 的第一/唯一调用方） | ✔ S6 收编 |
+  | `expm.hpp` | 54 | `expm` 16 项 | ✔ S5 → **V1.6** |
   | `cholesky.hpp` | 116 | `cholesky` 98 项 | ✔ S2a |
   | `solve.hpp` | 129 | `solve` 34 项 | ✔ S1 |
   | `svd.hpp` | 137 | `svd` 266 项 | ✔ S4 → **V1.4** |
-  | `inverse.hpp` | 161 | `inverse` 78 项 | ✔ S2 / S2a-2 → **V1.2** |
+  | `inverse.hpp` | 188 | `inverse` **85 项**（含新增 `qr_inverse` [H] 段）+ `smoke` B6d/B6e | ✔ S2 / S2a-2 → **V1.2**；**S-App6 ✔ 2026-10-16** |
   | `eigen.hpp` | 167 | `eigen` 119 项 | ✔ S3 → **V1.3** |
   | `qr.hpp` | 258 | `qr` 189 项 | ✔ S6b（V2.1） |
 
-  合计 **1062 行**。`householder.hpp` **已从工作区删除**（`git status` 显示 `D`，**未提交**；
-  其内容由 `qr.hpp` 自带的 Householder 接手）—— 待 **S6 支线定案**后一并提交。
+  合计 **1089 行**（`qr_inverse` 补回代 +27 行）。`householder.hpp` **已删除并随 `6999ca2` 提交**（内容由 `qr.hpp` 自带的
+  Householder 接手）。**全局实例化闸门** `demo/linalg/smoke.cpp`（2026-10-16 新增）：
+  `EntryTable<T>` 对 40 个公开入口取函数指针（odr-use ⇒ 强制实例化）+ 54 项最小数值判据，
+  double 与 Complex 各跑一遍 —— **这是 V1.1 的显式证据**。
 
-  - **测试入口**：`./graphics/run_tests.sh` → ctest **8/8**、构建 0 告警 0 错误；
-    附加区 `./graphics/run_apps.sh`（`demo/apps/`，**不注册 ctest**，首个成员 `string_modes`，
-    即 fan-plan 扇面 A1 的 C++ 版）。
+  - **测试入口**：`./graphics/run_tests.sh` → ctest **13/13**、构建 0 告警 0 错误
+    （含 `-c -w` 从零 + `-Wall -Wextra` 复验）；附加区 `./graphics/run_apps.sh`
+    （`demo/apps/`，**不注册 ctest**，首个成员 `string_modes`，即 fan-plan 扇面 A1 的 C++ 版）。
   - **V1 验收落点**（`graphics/plan.md` 的 V1.1–V1.7，逐条）：
+    - **V1.1 ✔** 2026-10-16 通过（ctest **`smoke`**，54 项 / FAIL 0，构建 0 告警）：
+      40 个公开入口 × {`double`, `Complex<double>`} 各实例化一次（同一份源码零修改），
+      数值侧最差 Solve 残差 5.8e-17、Inverse 2.2e-16、QR 重构 3.4e-16、expm 自洽 6.7e-16。
+      **注入反例两条**（见 §6 同日条）：漏 `conj` → 全项目**只有 smoke 挂**（1 条）；
+      写入只在实例化时暴露的编译错误 → 「只 include」的探针**编得过**、其余 10 个 ctest
+      **全部照常构建**，只有 smoke 编不过。
     - **V1.2 ✔** 求逆残差最差 double **1.18e-13** / complex **9.16e-16**（判据 1e-8）
     - **V1.3 ✔** Jacobi 重构最差 double **1.78e-15** / complex **1.33e-15**
     - **V1.4 ✔** SVD 重构最差 double **1.332e-15** / complex **7.772e-16**；σ 非负降序
-    - **V1.1 ⚠️ 实质满足、缺显式闸门** —— 8 个 ctest 各自在 double + Complex 下实例化
-      **同一份** linalg 源码；缺的是「只 include + 实例化全部公开入口」的烟测
-      （`demo/linalg/smoke.cpp`，即原收尾清单的第 ⑧ 项）
     - **V1.5 ✔** 2026-10-16 通过（ctest **`dual_complex`**，22 项 / FAIL 0）：
       `Matrix<Dual<Complex<double>>>` 零修改走通（含 `Solve`，value 与纯 Complex **精确 0**，n=2/4/6）；
       z² 单种子（两种子 `derive/s` 一致 = 2z₀）/ |z|² 双种子（重组出 2z̄）均**精确 0**。
       另加「A(θ)x=b 求 dx/dθ」自动传播，与解析式 5.2e-18 / 中心差分 6.9e-12 三方对拍。
-      （§3 此前「完全没动、从未被任何 TU 实例化」的判断已过期。）
-    - **V1.6 ⚠️ 一半** —— `expm.hpp` 已落地（2026-10-15）；`[Jx,Jy]=Jz` 不需要 expm，
-      实测**精确 0**；缺 `demo/linalg/expm.cpp` + ctest 注册
-    - **V1.7 ❌ 未做** —— 纯演示（单位复数乘法 = 平面旋转，不作硬验收），可落 `demo/apps/`
+    - **V1.6 ✔** 2026-10-16 通过（ctest **`expm`**，16 项 / FAIL 0）：`expm.hpp`（S5 刀 1）+
+      刀 2 `[Ji,Jj]=ε_ijk Jk` 判**精确 0** + 刀 3 **三线对拍**（级数 / 谱路线 / Rodrigues）
+      在 θ∈{0,0.3,1,2,3,−0.9,2π} 上 ≤1.2e-15 + 几何判据（`R·u=u`、`tr R=1+2cosθ`、`det R=1`、
+      `RᵀR=I`）与超强判据 `det(exp X)=exp(tr X)` ≤1.0e-15。
+    - **V1.7 ❌ 未做** —— 纯演示（单位复数乘法 = 平面旋转，**不作硬验收**），可落 `demo/apps/`；
+      **用户 2026-10-16 明确「先不用管」**，故不阻塞 V1 收口。
   - **其余工程事实**：`compute_graph` 基线（forward-mode）成立；**反向模式明确未实现**
     （抛 `logic_error`，按 `matrix.md` §7.5 属**待立项功能**而非 bug）；
     `scalar_traits` 44 项 + `compute_graph` 36 项；`a_triangle` 空文件、无 CMakeLists、
     未注册（等阶段 3 渲染骨架）。
-  - **工作区未提交改动**（`HEAD` 仍是 **`bae45df`（S6b），未 push**）：`src/linalg/expm.hpp`（S5）、
-    `src/linalg/qr.hpp`（`<q_k,q_k>≡1` 注释，10-14 遗留）、`src/linalg/householder.hpp`（`D`）、
-    `demo/CMakeLists.txt`、`demo/apps/`（新）、`run_apps.sh`（新）、`run_tests.sh`、`plan.md`、
-    `AGENTS.md`、本文件。
+  - **autodiff `Apply` 域分裂（2026-10-16 落地；§3 此前「编不过」的记录随之作废）**：
+    `Apply<T>` 原先只有一个 `Matrix<T>` 版本，体内却假定 `T = Dual<U>` ⇒ 标量域必然报
+    `error: use of undeclared identifier 'dualFunc'` —— `dualFunc` 是 `Dual` 的 **in-class
+    friend**（**ADL-only**，无法前置声明），`T = Dual<U>` 时实例化点 ADL 命中 ✅，标量域 ❌。
+    **现按域拆成 4 个重载**：`{FunctionType, Matrix<FunctionType>} × {Dual 专用, 标量专用}`。
+    - Dual 版签名写 `Matrix<Dual<T>>`（走 `dualFunc`）；标量版 `Matrix<T>`（走新增的
+      `elemFunc` —— 标量域逐元素分派，`using std::sin;` + ADL）。
+    - **分流靠 [temp.deduct.partial] 部分排序**（`Matrix<Dual<U>>` 比 `Matrix<T>` 更特化），
+      不是任何 hack；标量版体内的 `static_assert(!IsDual<T>::value, ...)` 是**守卫**
+      （新增 trait `IsDual`，落在 `dual.hpp`）。
+    - **顺带修掉一个真 bug**：`dual.hpp` 的 `Dual<T>::ln` / `pow` 体内写的是 `log(x.value)`，
+      而 `Dual` 的友元叫 **`ln` 不是 `log`** ⇒ 对 `T = Dual<U>`（嵌套对偶 = **二阶导**）
+      ADL 断链（`no matching function for call to 'log'`）。补一个 `log` 转发即通
+      （实测 `ln(2)` 二阶导 −0.25 = −1/x²、`x³` 二阶导 12 = 6x，全中）。
+    - **实测**：4 域（`double` / `Complex` / `Dual<double>` / `Dual<Complex<double>>`）
+      × 4 重载全部实例化且数值对；derive 对拍解析导数 50 组**误差 0**；中心差分对拍最差
+      **3.666e-09**。
+  - **新增 ctest `apply`（17 项 FAIL 0）** —— 补上了此前最大的覆盖缺口：`GradOp::Function` /
+    `MatrixFunction` 两个节点**从未跑过** ⇒ `Apply` 数值零覆盖（连前向都没验）。现覆盖
+    4 重载 × 4 域 + Function/MatrixFunction 节点真实路径 + 嵌套对偶二阶导 + 维度不匹配 throw。
+  - **未动的一条**：`GradNode<T>` 仍然只支持 `T = Dual<U>`（`SumAll` / `MultAll` 等签名
+    写死 `Matrix<Dual<T>>`，`GradNode<double>` 实例化报 4 条错）—— 属另一件事。
+  - **工作区未提交改动**（`HEAD = 6999ca2`，**未 push**）：`demo/linalg/smoke.cpp`（新，V1.1 闸门）、
+    `demo/linalg/CMakeLists.txt`（注册 smoke）、`src/autodiff/{dual.hpp,jacobian.hpp}`（域分裂 +
+    log 修复）、`demo/autodiff/{apply.cpp,CMakeLists.txt}`（新用例）、`plan.md`（S 清单）、本文件。
 
   > 2026-10-13 的「基线接口层 bug 第二批修复」明细（标量契约 `const_n → fromReal`、
   > `ScalarTraits<Dual<T>>::conj/abs2` 成员名、`Derive` 收临时量、`Dual::operator=` 弃用告警、
@@ -136,27 +164,41 @@
 
 > **S1–S6b 已全部提交**（`solve` `inverse` `cholesky` `eigen` `svd` `qr` 六个入口 + `demo/common.hpp`
 > 测试基建），提交序 `17ea31b`(S1) → `c0ab458`(S2) → `daefb3e`(S2a) → `f73790b`(S2a-2) →
-> `5751b05`(S3) → `edfc572`(S4) → `bae45df`(S6b)；`HEAD = bae45df`，ctest **8/8**，均未 push。
-> 过程明细见 §6；**当前缺口只剩下面三条。**
+> `5751b05`(S3) → `edfc572`(S4) → `bae45df`(S6b) → **`6999ca2`（V1 收尾一刀：expm.hpp=刀1 +
+> `dual_complex`（V1.5）+ `expm.cpp`（V1.6）+ apps 附加区与 `run_apps.sh`，ctest 10/10）**；
+> `HEAD = 6999ca2`，**均未 push**。过程明细见 §6；**当前缺口只剩下面两条。**
 
-**V1 剩余三步（按性价比排序；做完 V1 才全绿）**：
+**V1 剩余两步（V1.1–V1.6 已全部验收，ctest 13/13）**：
 
 - [x] **① V1.5 用例 `demo/linalg/dual_complex.cpp`** —— ✅ 已完成（2026-10-16）：`demo/common.hpp`
       补 `RandFill<Dual<Complex<U>>>` 特化（原 `RandFill<Dual<U>>` 的 `static_cast<U>(a)` 在
       `U = Complex` 时编译失败 —— `Complex` 无单参构造），新增 ctest `dual_complex`（22 项 / FAIL 0）。
-      三条注入验证过（含一条**暴露并修掉我自己判据漏洞**的）。明细见 §6 同日条。
-- [ ] **① V1.6 demo `demo/linalg/expm.cpp`** —— `expm.hpp` 已就位，写用例即收。
-      与 `lie-plan.md` **刀 2/3 是同一件活**（so(3) 三基 + 对易子 + `exp(θ[u]×)` vs Rodrigues
-      **三线对拍**），合并做。判据：Rodrigues 对拍 <1e-13、`‖RᵀR−I‖` <1e-13、**`det(R)=+1`**（排反射）、
-      `R·u = u`、`tr R = 1+2cosθ`、`[Jx,Jy]−Jz` <1e-14、`det(exp X)=exp(tr X)`；
-      外加「朴素 Taylor 在 ‖A‖=20 卡 ~6e-9 地板」的反面件（**只打印、不判 FAIL**）。
-- [ ] **② S6 收口 + `S-App6`**：`demo/linalg/smoke.cpp`（只 include + 实例化**全部**公开入口，
-      double 与 Complex 各一次）—— 这是 **V1.1 的显式证据**，把「文件在、编译器从没跑过」钉死。
-      同时处置三条支线：`householder.hpp`（已删待定案与提交）、`MatrixType` 孤儿 vs `MatrixKind`、
-      `Dot` 零调用方。顺带 `S-App6`：`inverse.hpp:129` 的 `qr_inverse` 补 `A⁻¹ = R⁻¹Qᴴ` 回代（~10 行）。
-- [ ] **③ V1.7 + S7 收尾**：V1.7（单位复数乘法 = 平面旋转，纯演示，落 `demo/apps/`）；
-      S7 = V1.1–V1.7 在 `graphics/plan.md` 逐条勾选 + 本文 §0/§3/§4/§6 + 记忆同步。
+      三条注入验证过（含一条**暴露并修掉我自己判据漏洞**的）。明细见 §6 同日条（第 1 条）。
+- [x] **① V1.6 demo `demo/linalg/expm.cpp`** —— ✅ 已完成（2026-10-16，与 `lie-plan.md` 刀 2/3
+      合并做）：16 项判据（刀 1 expm 本体 / 刀 2 `[Ji,Jj]=ε_ijk Jk` 判精确 0 / 刀 3 **三线对拍** /
+      几何 + `det(exp X)=exp(tr X)` 超强判据），已随 `6999ca2` 提交。
+- [x] **② V1.1 显式闸门 `demo/linalg/smoke.cpp` + S6 收口** —— ✅ 已完成（2026-10-16，ctest 11/11 → 12/12）：
+      40 个公开入口取函数指针强制实例化（`kEntryCount` 计数防漏抄）+ 54 项最小数值判据，
+      double 与 Complex 各一遍。**注入两条**证明它真的补上了覆盖（漏 `conj` → 全项目只有它挂；
+      只在实例化时报的编译错误 → 只 include 的探针编得过、其余 10 个 ctest 照常构建，只有它编不过）。
+      **支线**：`Dot` 由本闸门收编（不再零调用方）；`qr_inverse` 当日随后补上回代（**S-App6 ✔**，
+      闸门 B6d/B6e 由「断言 throw」换成数值判据）；`MatrixType` 由用户定案挪到 `demo/common.hpp`。
+- [ ] **③ V1.7 + S7 收尾**：V1.7（单位复数乘法 = 平面旋转，纯演示，落 `demo/apps/`；**用户已定
+      「先不用管」**）；S7 = V1.1–V1.7 在 `graphics/plan.md` 逐条勾选 + 本文 §0/§3/§4/§6 + 记忆同步。
+      **注：V1 的实质内容（V1.1–V1.6）已全绿，V1.7 是唯一不作硬验收的演示件 —— 阶段 2 不必等它。**
 
+- [x] **S6 支线定案 —— ✅ 2026-10-16 三条全结算**：① **`Dot`** 由 `smoke` 收编（不再零调用方）；
+      ② **`MatrixType`** —— **用户定案：挪到应用层 `demo/common.hpp`**（它按**用途**划分，代码原注释
+      自陈「不能按用途去分，怎么用是上层的责任」）；core 层只留按**代数结构**分的 `MatrixKind`
+      （带 tol 判定）—— 与 `matrix.md` §3.7 实测结论一致（不给稠密 Matrix 存运行期结构标签）；
+      ③ **`S-App6` `qr_inverse`** 补 `A⁻¹ = R⁻¹Qᴴ`（回代）—— 已实现，见 §6 今日条。
+- [x] **✅ autodiff：`Apply` 的域契约已写进签名**（2026-10-16 落地，用户令「你改吧」）：
+      按域拆成 **4 个重载** —— Dual 专用 ×2（签名 `Matrix<Dual<T>>`，走 `dualFunc`）
+      + 标量专用 ×2（签名 `Matrix<T>`，走新增的 `elemFunc`）；两者共存靠
+      [temp.deduct.partial] **部分排序**分流（`Matrix<Dual<U>>` 更特化），标量版体内
+      `static_assert(!IsDual<T>::value, ...)` 作守卫。**新增 ctest `apply`（17 项 FAIL 0）**。
+      顺带修掉 `dual.hpp` 的 `ln`/`log` ADL 断链（嵌套对偶 = 二阶导）。四条注入对照见 §6 今日条。
+      **已了结。**
 - [ ] **遗留（不阻塞 V1 收口）**：`src/core/perspective.hpp` / `rotate.hpp` 旧接口未处置
       （阶段 1 重写 matrix 时本应一并处理）。
 
@@ -176,6 +218,71 @@
 ---
 
 ## 6. 进度日志（append-only：只追加，不修改历史条目）
+
+### 2026-10-17
+
+- **扇面分层调整 + G 系列立项（文档层，无代码改动）** —— 用户两项决定落地：
+  ① **viz 层暂缓启用**：纯 Python 数学演示改挂 **`graphics/demo/pyapps/`**（与 `demo/apps/`
+  同构：不进 ctest、无 CMake、文件名 = 演示名）；「Python×C++ 联动才去 viz 层」，
+  触发条件 = 第一个联动 demo（届时按既定方案建 `graphics/bind/linalg.cpp`：
+  pybind11 绑 7 算法 × 双域、Matrix 走 numpy↔Matrix 壳函数转换、`run_bind.sh`）。
+  ② **G 系列（球面测地线）立项**：用户选题「三维球体（地球）测地线入门旋转、张量、曲率」——
+  G1 大圆 vs 纬线 / G2 测地线方程（RK4 预演）/ G3 平行移动 holonomy（转角=2π·cosφ）⭐ /
+  G4 Gauss–Bonnet（球面三角形内角和>π + 网格离散版，即 V6.4 的 pyapps 预演）/
+  G5 曲率张量 2×2 实例。依据：`learning.md` 204 行手推题 + 607–608 Gauss–Bonnet 数值验证
+  + 阶段一 1.2 清单「曲率张量、测地线」；数学正课仍在 `learning.md` 阶段一（Lee 前 11 章）。
+  - 改动：`learning-todo/fan-plan.md` §1 分层表加 pyapps 行 + viz 暂缓说明与触发条件、
+    §3 加「↳ G 系列」行 + **§3.1 G 系列五刀表**、§9 开局三刀按最新状态修订
+    （A1 C++ 版已出 / S5 ✅ 转 lie 刀 4/5/6 / D2 挂 pyapps）；本文件 §0 扇面行同步。
+  - fan-plan.md 在 learning-todo 子仓（与 matrix.md 改动同处未提交区），提交须在该子仓进行。
+  - **git 状态提醒（父仓，23 项未提交）**：V1.5/V1.1 两刀（dual_complex/smoke/apply 等
+    ctest 11/11 的成果）仍在工作区（HEAD `6999ca2` 之后无提交）；另有 11408-notebook
+    新增 4 ipynb + modules/408 两文件 + learning-408 整目录 untracked。攒批提交时按刀分组。
+
+- **autodiff 反向模式落地：`grad_graph.hpp` 修 4 类 bug + 新增 ctest `backward`（12/12 → 13/13）**
+  —— 用户令「落实吧，最小化修改我的逻辑，并且把我的 bug 要说出来」。承接本日诊断（见下条），
+  把反向模式从「能跑但基本是错的」修到「12 个可用算子全对」。
+  - **`GradNode::Forward` 一行未动**（只修 `Backward` 侧 + `ComputationGraph::Backward`）。
+  - **bug 清单（全部实测确认；每条都写进了 `demo/autodiff/backward.cpp` 的头注释）**：
+
+    | # | 类别 | 位置 | 症状 |
+    |---|---|---|---|
+    | 1 | 架构 | `ComputationGraph::Backward()` | 直接 `throw` 拒绝执行 |
+    | 2 | 架构 | `GradNode::adjoint` | **从不按形状初始化**（默认 0×0），而所有分支都写 `+=` ⇒ 第一个节点就抛 |
+    | 3 | 静默 | `case Mult` **缺失** | Forward 里 Mult ≡ CWiseMult，Backward 只写了 CWiseMult ⇒ **乘法节点反向静默 no-op** |
+    | 4 | 静默 | `case Output` **缺失** | 透传节点不回传伴随 |
+    | 5 | 静默 | `case Transpose` | `node1->adjoint = node1->matrix.Transpose()` —— 用了**原值**而非上游伴随，且 `=` 而非 `+=` |
+    | 6 | 抛异常 | `case Divide` 的 node1 | 逐元素除法误写成矩阵乘 `adjoint * node2->matrix.Transpose()` |
+    | 7 | 抛异常 | `case MultAll` | 1×n 与 1×1 做 `cwiseProduct`；且偏导在 Dual 的 `derive` 分量，需先 `Derive` 提取 |
+    | 8 | 抛异常 | `case Function`/`MatrixFunction` | `adjoint * Derive(Apply(...))` 用了矩阵乘；逐元素函数应逐元素乘 |
+    | 9 | 语义 | 同上 | `Derive(Apply(A,f))` = **f'(x)·A.derive**（依赖种子），不是 f'(x) ⇒ 改用 `LocalDeriv` |
+    | 10 | 静默 | `case Sigmoid/Relu/Tanh/Softmax` | case 写了但 **body 是空的**，`-Wswitch` 抓不到（**本次未动**，Forward 侧本来就是占位） |
+    | 11 | 注释过期 | `case Inverse` 的 Forward | throw「待 linalg::Inverse 落地 (阶段 1)」，而它 **V1.2 就落地验收了** |
+
+  - **改动（`grad_graph.hpp` +71/−17；`jacobian.hpp` 加 `localFunc`/`LocalDeriv`）**：
+    ① `ComputationGraph::Backward()` 换真实现（**形状初始化 → 输出播种 → 拓扑逆序回传**），
+    并加 `Backward(const Matrix<T>& seed)` 重载；② 补 5 个 case（`Input`/`Constant`/`Output`/
+    `Mult`/`CWisePow`），**顺带 `-Wswitch` 归零**；③ 修上表 §5–§8 四处的公式；
+    ④ `jacobian.hpp` 加 `localFunc`（局部导数标量分派，7 行）+ `LocalDeriv`（与种子解耦）。
+  - **`LocalDeriv` 为什么不用 `Derive(Apply(...))`**：实测 `x.derive` = 0 / 1 / 3 会让
+    `Derive(Apply(x, sin))` 得 **`[0,0]` / `cos(x)` / `3·cos(x)`** —— 局部导数**必须与种子无关**。
+  - **新增 ctest `backward`（29 项 FAIL 0）**：`[A]` 最小闭环 `y = Σ(w ⊙ x) + b` 三方对拍
+    （解析 / 中心差分 / **前向模式**）+ `[B]` 12 个可用算子逐条 + `[C]` adjoint 自动初始化 +
+    `[D]` 幂等 + `[E]` **如实断言占位算子仍不可用**（照抄 `smoke.cpp` 的规矩，不假装它可用）。
+  - **两条注入对照**：① 拿掉 `case Mult` → **只有 `backward` 挂，且只挂 [B3]**；
+    ② 删掉形状初始化 → `backward` **退出码 134（SIGABRT）**，正是原版「一跑就抛」的活体复现。
+    恢复用 `cp` + `shasum`（`3fd3f50a…` 一致）、`grep src/` 0 残留、复跑 13/13。
+  - **验证**：`./run_tests.sh` **13/13**；`-c -w`（从零 + `-Wall -Wextra`）**告警 0、错误 0、13/13**。
+  - **未动**：8 个 `throw` 占位（CWisePow / Inverse / Sigmoid / Relu / Tanh / Softmax /
+    CrossEntropy / LnMultAll）按用户令「占位的先不管」保持原样 —— 但 `[E3]` 已**如实断言**
+    `Sigmoid::Backward` 仍是**空 body 静默 0**（将来实现后该判据会 FAIL，提醒更新用例）。
+- **口径修正：「要不要 tape」（承接同日讨论）** —— 上一轮把 §7.5 的「顺手存局部导数」讲成了
+  硬约束，**是我说错了**。用户指出：反向时重算 `f'(x.value)` 与「前向时存」**等价**（纯函数），
+  「存」只剩「省一次 O(n) 计算」；且本架构 `shared_ptr` 持有 `matrix` ⇒ 中间量一直在 ⇒
+  **永远可重算**。tape 真正的独占优势是**省内存**（不保留全部中间量）与动态控制流。
+  §7.5 三条重新分层：**① 局部导数与种子解耦 = 硬（正确性）**；② 每算子第二份代码 = 事实但免不掉；
+  ③ 伴随独立存储 = 工程取舍。用户的取舍（`adjoint` 仍用 `Matrix<Dual<U>>` 以保 `GradNode<T>`
+  单模板参数）**成立**，代价只有 `MultAll` 需 `Derive(...)` 提取一次。
 
 ### 2026-10-16
 
@@ -205,6 +312,140 @@
   - **文档同步**：`graphics/plan.md` S 清单插入 V1.5 完成条（S6b 后 / S7 前）；本文件 §0 头部 +
     §3 V1.5 行 + §4「剩余四步 → 三步」（① 划掉，②③④ 重编号 ①②③）。
   - **未提交**：改动仍在工作区（`HEAD` 仍 `bae45df`）。
+
+- **V1.1 显式闸门落地：`demo/linalg/smoke.cpp`（代码改动 + 文档同步；ctest 10/10 → 11/11）** ——
+  用户令「v1.7 那个 rotate demo 先不用管，看接下来要搞什么」，故选 **V1 最后一个缺硬证据的节点**
+  （V1.1），即 §4 的第 ② 步。**V1.7 是唯一不作硬验收的演示件，不阻塞收口。**
+  - **在解决什么**：V1.2–V1.6 各自只覆盖**自己用到的**入口（solve/inverse/cholesky/eigen/svd/qr/expm）。
+    V1.1 要的证据不是「某个入口算得对」，而是「**每一个公开入口都在 double 与 Complex 下各实例化过一次**」
+    —— 与 2026-10-14 那次「528 行从未被任何 TU include」是同一件事的收尾：模板 bug 只在实例化时暴露。
+  - **两段设计（不合并）**：**[A] 实例化闸门** —— `EntryTable<T>` 对 40 个公开入口（27 自由函数 +
+    13 个 `Matrix<T>` 成员，含 `Inverse` 两个重载的显式消歧 `static_cast`）**取函数指针**（odr-use
+    ⇒ 强制实例化），刻意**不调用**；配 `kEntryCount = 40` 计数，漏抄一行会被抓。
+    **[B] 最小数值闸门** —— 每个入口跑一次 + 一条轻量判据（阈值 1e-10，比专项用例松）。
+    合计 **54 项 / FAIL 0**：double 侧 Solve 5.8e-17、Inverse 2.2e-16、QR 重构 3.4e-16；
+    complex 侧 Solve 5.8e-17、Inverse 4.4e-16、expm 自洽 6.7e-16。
+  - **顺带结算的支线**：① **`Dot` 零调用方** —— 本闸门成为它的第一个调用方，判据 `<v,v> = Σ|v_i|²`
+    把它与 `Abs2` 钉在一起（顺带覆盖「复数域必须共轭第一个参数」这个被测过 4 次的「double 免疫」点）；
+    ② **`qr_inverse`** —— 闸门**如实断言它 throw `logic_error`**（不假装它可用），补回代留给 S-App6；
+    ③ **`MatrixType` 孤儿** —— 不属 V1.1，仍在 §4 挂着等定案（建议删，结构类归 `MatrixKind`）。
+  - **注入反例两条（本次最值钱的证据）**：
+    - **① 行为型**：`operator.hpp::Dot` 去掉 `conj` → 全项目 **只有 smoke 挂**（1 条，[B12] complex，
+      残差 2.048e-01），其余 **10 个 ctest 全绿** —— 因为 `Dot` 此前零调用方，
+      **这个 bug 在旧测试体系下完全不可见**。
+    - **② 编译型**：往 `Dot` 体内写一句只在实例化时非法的 `a.OnlyAtInstantiation()` →
+      只 `#include "linalg/operator.hpp"` 的探针**编得过**（证明「include 过」≠「编译器看过」），
+      而 `run_tests.sh` 在 **smoke.cpp 处编不过**、**其余 10 个 target 全部照常 `Built`** ——
+      正好把「实例化才暴露」这件事两面都钉死。
+      恢复用 `cp` 备份 + `shasum` 比对（`7e9a1092…` 前后一致），`grep 注入` 0 残留，复跑 11/11。
+  - **验证**：`./run_tests.sh` **11/11**；另跑 **`-c -w`**（从零 + `-Wall -Wextra`）→ **告警 0、错误 0、11/11**。
+  - **🆕 顺带发现（未修，不属本刀）**：`autodiff/jacobian.hpp` 的 `Apply<T>` 在 **double 域探针**下
+    报 `use of undeclared identifier 'dualFunc'`（`:22`/`:42`）—— 当时据此记为「两个重载都编不过」。
+    ⚠️ **该结论已于本日第二次探针更正**（见本日「autodiff 域契约勘定」条）：`Apply` 在
+    **`Dual` 域是好的**，只是标量域越界；`Derive`/`SumAll`/`MultAll`/`MultAllBackward` 在 Dual 域
+    实例化干净。autodiff 按 §1 归用户自行推进，只记录不改动。（探针：`/tmp/probe_jacobian.cpp`）
+  - **文档同步**：`graphics/plan.md` S 清单补 V1.1 条 + 待办追加 jacobian 发现；本文件 §0 头部与
+    工程行、§3 表格与 V1 落点、§4「三步 → 两步」。**未提交**（`HEAD` 仍 `6999ca2`）。
+
+- **S6 三条派支线结算（代码改动 + 文档同步；ctest 仍 11/11）** —— 用户令「MatrixType 我放到 demo 的
+  common 里了，Dot 是啥，还有 qr_inverse 那个你也搞一下」，三件一并收口。
+  - **① `MatrixType` → 应用层（用户定案）**：从 `src/core/common.hpp` 挪到 `demo/common.hpp`
+    （用户改的，core 侧已删除），core 层只留按**代数结构**分的 `MatrixKind`。原注释「不能按用途去分，
+    怎么用是上层的责任」即理由 —— 与 `matrix.md` §3.7 的实测结论同向（不给稠密 `Matrix` 存运行期
+    结构标签）。代码侧零引用（`grep -rn MatrixType src/ demo/` 只剩定义处 + smoke 的说明注释），
+    对编译无影响。
+  - **② `qr_inverse` 补回代（S-App6）** —— `inverse.hpp` 的 `throw` 占位换成真实现（+27 行含注释）：
+    `A = Q·R ⇒ A⁻¹ = R⁻¹Qᴴ`。用 `QR_Householder`（新增 `#include "linalg/qr.hpp"`；qr.hpp 只
+    include core/* + operator.hpp，**不反向依赖 inverse.hpp ⇒ 无循环**），对上三角 R **直接回代**
+    求 R⁻¹（右端项 B = I 原地被解成 R⁻¹；**不复用通用 `Solve`**——R 已是上三角，再走一遍 LU 等于
+    白花一遍 O(n³)；也不显式求逆再乘），末尾一次 `X * Q.Adjoint()`。奇异判据 `|R_ii| <= DefaultTol`
+    即抛（与 `lu_inverse` / `diagonal_inverse` 同口径 D12）。
+    它**不接 `Inverse` 分发**：`MatrixKind` 里没有、也不该有「QR 档」（QR 是算法不是代数结构），
+    故与 `lu_inverse` / `cholesky_inverse` 并列，是一条显式点名的独立路径。
+  - **验收**：`demo/linalg/inverse.cpp` 新增 **[H] 段**（+8 项 → `inverse` **85 项 / FAIL 0**）：
+    随机 n=2..5 残差 + **与 `lu_inverse` 逐元对拍**（只判残差不钉住"算的是同一个逆"；两条独立实现
+    互为判据）+ 复 2×2（D7 老坑：`Qᴴ` 极易写成 `Qᵀ`）+ 奇异 / 非方阵 / 0×0 三条 throw 路径。
+    实测残差 double ≤ **1.11e-15**、complex **2.48e-16**，与 `lu_inverse` 逐元差 ≤ **6.22e-15**；
+    汇总行加了 `qr_inverse` 一列。`smoke.cpp` 的 [B6d]（原「如实断言 throw」）改为数值判据，
+    并新增 [B6e]（零矩阵 → R 对角奇异 → throw），`smoke` **54 → 56 项**。
+  - **注入反例两条（本次最值钱的证据）**：① `Q.Adjoint()` → `Q.Transpose()`（D7 经典坑）→
+    **只有复数域挂**（`inverse` [H]② 残差 8.889e-01、`smoke` [B6d] complex 残差 4.088e-02），
+    double 侧全绿、11 个 ctest 里只红 `inverse`/`smoke` —— **第 5 次「double 免疫」现场**；
+    ② 删掉奇异判据 → **恰好只挂那 3 条 throw 判据**（`inverse` [H] ×1、`smoke` [B6e] ×2），
+    其余全绿。恢复用 `cp` + `shasum`（`f03aea15…` 前后一致）、`grep -r 注入 src/` **0 残留**。
+  - **验证**：`./run_tests.sh` **11/11**；另跑 **`-c -w`**（从零 + `-Wall -Wextra`）→ **告警 0、错误 0**。
+  - **文档同步**：`graphics/plan.md` S6 条、S-App6 待办（勾选）、V1.1 条副产物；本文件 §0 工程行、
+    §3 表格（`inverse.hpp` 161 → **188** 行、`inverse` 78 → **85** 项；linalg 合计 1062 → **1089** 行）
+    与 V1 落点、§4 S6 支线条。**未提交**（`HEAD` 仍 `6999ca2`；工作区里的 `demo/common.hpp` /
+    `src/core/common.hpp` 是用户自己改的 MatrixType 迁移）。
+
+- **autodiff 域契约勘定（纯诊断，零代码改动；ctest 仍 11/11）** —— 用户令「先把 autodiff 调通吧，
+  不改代码，告诉我要怎么搞」。**结论：autodiff 没坏 —— 是域契约没写进签名 + 覆盖全缺。**
+  - **推翻了本日早先的一条记录**：`Apply<T>` **不是「两个重载都编不过」**，而是
+    **只在 `T = Dual<U>` 域编得过**。早先结论出自 double 域探针 —— 与 §3.3 第 1 条「分域探针」
+    同源、**方向相反**：那次是「double 探针 0 错掩盖真 bug」，这次是「double 探针报错」被误读成
+    「整个模板坏了」。**同一个坑的第二次踩法。**
+  - **机制（实测）**：`dualFunc` 是 `Dual<T>` 的 **in-class friend** ⇒ **ADL-only**、无法前置声明。
+    `Apply` 体内的 `dualFunc(A.Data()[i], f)` 是**依赖调用**，名字查找 = 定义点普通查找（找不到）
+    + **实例化点 ADL**。`T = Dual<U>` ⇒ ADL 命中 `Dual<U>` 的友元 ✅；`T = double`/`Complex`
+    ⇒ 无关联类含此友元 ⇒ `use of undeclared identifier 'dualFunc'` ❌。
+  - **实测矩阵**（同一份头文件，只换域；`clang++ -std=c++20 -I src -fsyntax-only`）：
+    | 探针 | 域 | 结果 |
+    |---|---|---|
+    | `Apply(A, FunctionType::Sin)` | `double` / `Complex<double>` | ❌ `undeclared identifier 'dualFunc'` |
+    | 同上 | `Dual<double>` / `Dual<float>` / `Dual<Complex<double>>` | ✅ 全过（退出码 0） |
+    | `Apply(A, Matrix<FunctionType>)` | `Dual<double>` | ✅ 过 |
+    | `GradNode<double>::Forward()` | `double` | ❌ 4 条（`SumAll`/`MultAll` no matching + `Apply<double>` ×2） |
+    | `GradNode<Dual<float>>::Forward()` | `Dual<float>` | ✅ 过 |
+  - **数值已验**：`Apply<Dual<double>>` 五个 `FunctionType` 的 `derive` 与解析导数**逐条误差 0**
+    （seed=1：Sin 0.764842…/Cos −0.295520…/Exp 3.320116…/Log 0.5/Sqrt 0.267261…）——
+    所以 `Apply` 在它自己的域里是**正确**的。
+  - **真正缺口是覆盖，不是正确性**：① `compute_graph` 只跑 Input/Mult/Add/Output/SumAll 五种
+    GradOp —— **`Function`/`MatrixFunction` 从未跑过**，`Apply` 的数值行为**零覆盖**（连前向都没验）；
+    ② `GradNode<T>` 整体**只支持 `Dual<U>`**（其余签名早写死 `Matrix<Dual<T>>`），
+    但**没有任何地方声明这一点**，越界时报错分散在四个位置、信息晦涩。
+  - **三条处置路线（用户选）**：① 给 `Apply` 加域约束（`requires`/`static_assert` 把 `Dual` 写进
+    签名）——错误信息从「undeclared identifier」变「只支持 Dual 域」，**最小改动**；
+    ② 给标量域补一层逐元素分派（走 `std::sin` 等，复数用 ADL）——**扩能力**；
+    ③ 只补闸门不动实现。**三条都缺同一件东西**：autodiff 实例化烟测（照抄 `EntryTable`，
+    但**按域铺开**——同一模板在每个适用域各取一次函数指针）+ 一个 `Function` 节点数值用例。
+  - **文档同步**：`dev-progress.md` §0 工程行 / §3 新发现段 / §4 待办条 / 本 §6 条；
+    `graphics/plan.md` 待办条 —— 均把「两个重载都编不过」更正为域契约表述、附**两条对照探针**
+    （`/tmp/pa.cpp` double 域报错 vs `/tmp/pb.cpp` Dual 域 0 错）。**零代码改动**，`HEAD = 6999ca2`。
+
+- **autodiff `Apply` 域分裂落地 + `dual.hpp` log 断链修复（代码改动 + 新 ctest；11/11 → 12/12）**
+  —— 用户令「你改吧」，在上一条给出的三选一里走**路线 ②**（标量域补逐元素分派）：它是唯一
+  「既把域契约钉死、又不丢能力」的一条；路线 ①（只加约束）会让标量域彻底不可用。
+  - **`src/autodiff/dual.hpp`（152 → 169 行）**：① 新增域判别 trait `IsDual`（前置声明 + 特化，
+    置于 `Dual` 类之前），供守卫使用；② 新增 `friend Dual log(const Dual&)` 转发 `ln` ——
+    **修一个真 bug**：`ln` 体内写的是 `log(x.value)`，而 `Dual` 的友元叫 `ln` 不叫 `log`，
+    对 `T = Dual<U>`（嵌套对偶 = **二阶导**）ADL 断链（`no matching function for call to 'log'`）；
+    `pow` 体内同样用 `log`，一并受益。
+  - **`src/autodiff/jacobian.hpp`（100 → 162 行）**：新增 `elemFunc`（标量域逐元素分派，
+    `using std::sin;` + ADL）、补 `#include <cmath>`/`<type_traits>`；`Apply` 拆成 **4 个重载**
+    —— `{FunctionType, Matrix<FunctionType>} × {Matrix<Dual<T>> 版, Matrix<T> 版}`。
+    Dual 版走 `dualFunc`、标量版走 `elemFunc`；标量版体内 `static_assert(!IsDual<T>::value, ...)`
+    作守卫。**分流机制**：`Matrix<Dual<U>>` 比 `Matrix<T>` 更特化，[temp.deduct.partial] 部分排序
+    必然把 Dual 域判给 Dual 版 —— 标准行为，非编译器扩展。
+  - **新增 ctest `apply`（`demo/autodiff/apply.cpp`，17 项 FAIL 0）**：4 重载 × 4 域 +
+    Function/MatrixFunction 节点真实路径 + 嵌套对偶二阶导 + 维度不匹配 throw。
+    **关键数字**：derive 对拍解析导数 **50 组误差全 0**；中心差分对拍最差 **3.666e-09**（阈值 1e-8）；
+    `ln(2)` 二阶导 **−0.25**（= −1/x²）、`x³` 二阶导 **12**（= 6x）；Complex 域对拍 `std::complex` ≤ 1e-15。
+  - **四条注入对照（本次最值钱的证据）**：
+    | # | 注入 | 结果 |
+    |---|---|---|
+    | ① | 行为型：`elemFunc` 的 `Log` 错映射成 `exp` | **只有 `apply` 挂，其余 11 个全绿** —— 证明标量域此前**零覆盖** |
+    | ② | 编译型：标量版体内写 `A.OnlyAtInstantiation()` | 只 include 的探针**编过**；`compute_graph` 照常 Built；**只有 `apply` 编不过**，报 `Matrix<Complex<double>>` 无此成员 ⇒ 标量版的 double 与 Complex **两个域都被实例化** |
+    | ③ | 偏序：`#if 0` 掉 Dual 专用版 | Dual 域**确实落到标量版**，被守卫拦住并给出 `static assertion failed … : Apply: Dual 域应由 Dual 专用重载接管`（`Dual<double>` + `Dual<Complex<double>>` 各一次）⇒ 守卫**必要**且**有效** |
+    | ④ | 枚举扩展：临时给 `FunctionType` 加 `Tanh` | `elemFunc`（`jacobian.hpp`）+ apply 的 4 个 switch **全报 `-Wswitch`**，而 `dual.hpp` 的 `dualFunc` **命中 0** ⇒ 坐实它的 `default: return x;` 会**静默吞掉**新枚举 |
+    恢复一律 `cp` + `shasum` 比对（`c614c460…` 一致）、`grep -r 注入 src/` **0 残留**、复跑全量。
+  - **验证**：`./run_tests.sh` **12/12**；`-c -w`（从零 + `-Wall -Wextra`）→ **告警 0、错误 0、12/12**。
+    （中途出过一条 `-Wunused-function`：`apply.cpp` 里写了 `FName` 却没用上 —— 已改为在 [B] 段
+    逐函数打印最差误差，顺带让输出更有信息量。）
+  - **未动**：`GradNode<T>` 仍只支持 `T = Dual<U>`；`GradNode::Backward` 的 `-Wswitch`
+    （5 个枚举未处理，含 `Mult` **静默 no-op**）—— 都属 `grad_graph.hpp`，另议。
+  - **文档同步**：本文件 §0 头部与工程行、§3 段（改为"已落地"）、§4 待办条（→ `[x]`）、§6 本条；
+    `graphics/plan.md` 待办条。**未提交**（`HEAD` 仍 `6999ca2`）。
 
 ### 2026-10-15
 
