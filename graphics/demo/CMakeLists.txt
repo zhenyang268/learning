@@ -3,4 +3,5 @@
 add_subdirectory(core)
 add_subdirectory(autodiff)
 add_subdirectory(linalg)
+add_subdirectory(quat)
 add_subdirectory(apps)

@@ -104,13 +104,13 @@ static void TestA_AllOverloadsAllDomains()
 
     // --- (2) 标量专用: double ---
     {
-        Matrix<double> A(1, 3);
-        for (int j = 0; j < 3; j++) A(0, j) = kXs[j];
+        Matrix<double> A(3, 1);
+        for (int j = 0; j < 3; j++) A(j, 0) = kXs[j];
         bool ok = true;
         for (FunctionType f : kAll) {
             auto B = Apply(A, f);
             for (int j = 0; j < 3; j++) {
-                if (std::fabs(B(0, j) - AnalyticValue(f, kXs[j])) > tol) ok = false;
+                if (std::fabs(B(j, 0) - AnalyticValue(f, kXs[j])) > tol) ok = false;
             }
         }
         ck.check(ok, std::string("[A1] (2) Matrix<double> x FunctionType, 5 函数 x 3 点"));
@@ -118,27 +118,27 @@ static void TestA_AllOverloadsAllDomains()
 
     // --- (4) 标量专用: double + Matrix<FunctionType> (每格不同函数) ---
     {
-        Matrix<double> A(1, 3);
-        for (int j = 0; j < 3; j++) A(0, j) = kXs[j];
-        Matrix<FunctionType> F(1, 3, std::vector<FunctionType>{
+        Matrix<double> A(3, 1);
+        for (int j = 0; j < 3; j++) A(j, 0) = kXs[j];
+        Matrix<FunctionType> F(3, 1, std::vector<FunctionType>{
             FunctionType::Sin, FunctionType::Exp, FunctionType::Log});
         auto B = Apply(A, F);
         bool ok = std::fabs(B(0, 0) - std::sin(0.7)) < tol
-               && std::fabs(B(0, 1) - std::exp(2.0)) < tol
-               && std::fabs(B(0, 2) - std::log(3.5)) < tol;
+               && std::fabs(B(1, 0) - std::exp(2.0)) < tol
+               && std::fabs(B(2, 0) - std::log(3.5)) < tol;
         ck.check(ok, std::string("[A2] (4) Matrix<double> x Matrix<FunctionType> 逐格不同"));
     }
 
     // --- (1) Dual 专用: value 与 derive 都要对 ---
     {
-        Matrix<D> A(1, 3);
-        for (int j = 0; j < 3; j++) A(0, j) = D(kXs[j], 1.0);   // seed = 1
+        Matrix<D> A(3, 1);
+        for (int j = 0; j < 3; j++) A(j, 0) = D(kXs[j], 1.0);   // seed = 1
         bool ok = true;
         for (FunctionType f : kAll) {
             auto B = Apply(A, f);
             for (int j = 0; j < 3; j++) {
-                if (std::fabs(B(0, j).value  - AnalyticValue(f, kXs[j])) > tol) ok = false;
-                if (std::fabs(B(0, j).derive - AnalyticDeriv(f, kXs[j])) > 1e-14) ok = false;
+                if (std::fabs(B(j, 0).value  - AnalyticValue(f, kXs[j])) > tol) ok = false;
+                if (std::fabs(B(j, 0).derive - AnalyticDeriv(f, kXs[j])) > 1e-14) ok = false;
             }
         }
         ck.check(ok, std::string("[A3] (1) Matrix<Dual<double>> x FunctionType, value+derive"));
@@ -146,15 +146,15 @@ static void TestA_AllOverloadsAllDomains()
 
     // --- (3) Dual 专用 + Matrix<FunctionType> ---
     {
-        Matrix<D> A(1, 2);
-        A(0, 0) = D(0.7, 1.0); A(0, 1) = D(1.2, 1.0);
-        Matrix<FunctionType> F(1, 2, std::vector<FunctionType>{
+        Matrix<D> A(2, 1);
+        A(0, 0) = D(0.7, 1.0); A(1, 0) = D(1.2, 1.0);
+        Matrix<FunctionType> F(2, 1, std::vector<FunctionType>{
             FunctionType::Sin, FunctionType::Exp});
         auto B = Apply(A, F);
         bool ok = std::fabs(B(0, 0).value  - std::sin(0.7)) < tol
                && std::fabs(B(0, 0).derive - std::cos(0.7)) < 1e-14
-               && std::fabs(B(0, 1).value  - std::exp(1.2)) < tol
-               && std::fabs(B(0, 1).derive - std::exp(1.2)) < 1e-14;
+               && std::fabs(B(1, 0).value  - std::exp(1.2)) < tol
+               && std::fabs(B(1, 0).derive - std::exp(1.2)) < 1e-14;
         ck.check(ok, std::string("[A4] (3) Matrix<Dual<double>> x Matrix<FunctionType>"));
     }
 
@@ -270,18 +270,18 @@ static void TestD_GradGraphFunctionNodes()
 
     // MatrixFunction 节点: y = [sin(x0), exp(x1)]
     {
-        Matrix<FunctionType> F(1, 2, std::vector<FunctionType>{
+        Matrix<FunctionType> F(2, 1, std::vector<FunctionType>{
             FunctionType::Sin, FunctionType::Exp});
         auto fn = std::make_shared<GradNode<D>>(GradOp::MatrixFunction, std::move(F));
-        Matrix<D> m(1, 2);
-        m(0, 0) = D(0.7, 1.0); m(0, 1) = D(1.2, 1.0);
+        Matrix<D> m(2, 1);
+        m(0, 0) = D(0.7, 1.0); m(1, 0) = D(1.2, 1.0);
         auto in = std::make_shared<GradNode<D>>(GradOp::Input, std::move(m));
         fn->FillInput(in);
         fn->Forward();
         bool ok = std::fabs(fn->matrix(0, 0).value  - std::sin(0.7)) < 1e-15
                && std::fabs(fn->matrix(0, 0).derive - std::cos(0.7)) < 1e-14
-               && std::fabs(fn->matrix(0, 1).value  - std::exp(1.2)) < 1e-15
-               && std::fabs(fn->matrix(0, 1).derive - std::exp(1.2)) < 1e-14;
+               && std::fabs(fn->matrix(1, 0).value  - std::exp(1.2)) < 1e-15
+               && std::fabs(fn->matrix(1, 0).derive - std::exp(1.2)) < 1e-14;
         ck.check(ok, std::string("[D2] MatrixFunction([sin, exp]) 逐格不同 + derive"));
     }
 
@@ -359,18 +359,25 @@ static void TestE_NestedDualSecondOrder()
 static void TestF_DimensionMismatch()
 {
     std::printf("\n[F] 维度不匹配 -> throw\n");
-    Matrix<double> A(1, 3);
-    Matrix<FunctionType> F(1, 2, std::vector<FunctionType>{
+    // 列向量约定: A 是 3x1, 函数矩阵误给成 2x1 (长度不符)
+    Matrix<double> A(3, 1);
+    Matrix<FunctionType> F(2, 1, std::vector<FunctionType>{
         FunctionType::Sin, FunctionType::Cos});
 
     bool threw = false;
     try { (void)Apply(A, F); } catch (const std::invalid_argument&) { threw = true; }
-    ck.check(threw, std::string("[F1] 标量版: A.Cols(3) != f.Cols(2) -> invalid_argument"));
+    ck.check(threw, std::string("[F1] 标量版: A 3x1 vs f 2x1 -> invalid_argument"));
 
-    Matrix<D> Ad(1, 3);
+    Matrix<D> Ad(3, 1);
     bool threw_u = false;
     try { (void)Apply(Ad, F); } catch (const std::invalid_argument&) { threw_u = true; }
     ck.check(threw_u, std::string("[F2] Dual 版: 同样 throw"));
+
+    // 反向对照: 1x1 函数矩阵应当**广播**, 不抛 (否则上面的 throw 可能只是"见到非同形就抛")
+    Matrix<FunctionType> F1(1, 1, std::vector<FunctionType>{FunctionType::Sin});
+    bool ok_bcast = false;
+    try { (void)Apply(A, F1); ok_bcast = true; } catch (const std::exception&) { ok_bcast = false; }
+    ck.check(ok_bcast, std::string("[F3] 1x1 函数矩阵 -> 广播, 不抛"));
 }
 
 // ===========================================================================

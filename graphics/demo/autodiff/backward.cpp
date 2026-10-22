@@ -47,6 +47,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 using D    = Dual<double>;
@@ -55,12 +56,12 @@ using P    = std::shared_ptr<Node>;
 
 static Checker ck;
 
-// 1xN 行向量
+// Nx1 **列**向量 (D19 第二次修订, 2026-10-19: 全库统一列向量 + 分子布局)
 static Matrix<D> MV(const std::vector<double>& vs, double seed = 0.0)
 {
     std::vector<D> d;
     for (double v : vs) d.emplace_back(v, seed);
-    return Matrix<D>(1, (int)vs.size(), d);
+    return Matrix<D>((int)vs.size(), 1, d);
 }
 // NxM
 static Matrix<D> MM(const std::vector<std::vector<double>>& rows)
@@ -93,7 +94,7 @@ static double AV(const P& n, int i = 0) { return n->adjoint.Data()[i].value; }
 static double MakeY(const std::vector<double>& xv)
 {
     auto x = Leaf(MV(xv)); auto w = Leaf(MV({5, 7})); auto b = Leaf(MV({0.5}));
-    auto m = Op(GradOp::CWiseMult, {x, w}, 1, 2);
+    auto m = Op(GradOp::CWiseMult, {x, w}, 2, 1);
     auto s = Op(GradOp::SumAll, {m}, 1, 1);
     auto y = Op(GradOp::Add, {s, b}, 1, 1);
     ComputationGraph<D> g(x, y);
@@ -107,7 +108,7 @@ static void TestA_MinLoop()
     auto x = Leaf(MV({2, 3}));
     auto w = Leaf(MV({5, 7}));
     auto b = Leaf(MV({0.5}));
-    auto m = Op(GradOp::CWiseMult, {x, w}, 1, 2);
+    auto m = Op(GradOp::CWiseMult, {x, w}, 2, 1);
     auto s = Op(GradOp::SumAll, {m}, 1, 1);
     auto y = Op(GradOp::Add, {s, b}, 1, 1);
 
@@ -131,7 +132,7 @@ static void TestA_MinLoop()
     // 独立判据 2: 前向模式 (Dual seed) 对拍 —— 两条独立实现路径
     {
         auto x2 = Leaf(MV({2,3})); auto w2 = Leaf(MV({5,7})); auto b2 = Leaf(MV({0.5}));
-        auto m2 = Op(GradOp::CWiseMult, {x2, w2}, 1, 2);
+        auto m2 = Op(GradOp::CWiseMult, {x2, w2}, 2, 1);
         auto s2 = Op(GradOp::SumAll, {m2}, 1, 1);
         auto y2 = Op(GradOp::Add, {s2, b2}, 1, 1);
         ComputationGraph<D> g2(x2, y2);
@@ -151,7 +152,7 @@ static void TestB_PerOperator()
 
     {   // Add
         auto x1 = Leaf(MV({1,2})), x2 = Leaf(MV({2,3}));
-        auto y = Op(GradOp::Add, {x1,x2}, 1, 2); y->Forward();
+        auto y = Op(GradOp::Add, {x1,x2}, 2, 1); y->Forward();
         y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
         y->Backward();
         ck.check(AV(x1,0)==1 && AV(x1,1)==1 && AV(x2,0)==1 && AV(x2,1)==1,
@@ -159,7 +160,7 @@ static void TestB_PerOperator()
     }
     {   // Sub
         auto x1 = Leaf(MV({1,2})), x2 = Leaf(MV({2,3}));
-        auto y = Op(GradOp::Sub, {x1,x2}, 1, 2); y->Forward();
+        auto y = Op(GradOp::Sub, {x1,x2}, 2, 1); y->Forward();
         y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
         y->Backward();
         ck.check(AV(x1,0)==1 && AV(x2,0)==-1 && AV(x2,1)==-1,
@@ -167,7 +168,7 @@ static void TestB_PerOperator()
     }
     {   // Mult (原版缺 case, 静默 no-op)
         auto x1 = Leaf(MV({2,3})), x2 = Leaf(MV({5,7}));
-        auto y = Op(GradOp::Mult, {x1,x2}, 1, 2); y->Forward();
+        auto y = Op(GradOp::Mult, {x1,x2}, 2, 1); y->Forward();
         y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
         y->Backward();
         ck.check(AV(x1,0)==5 && AV(x1,1)==7 && AV(x2,0)==2 && AV(x2,1)==3,
@@ -175,7 +176,7 @@ static void TestB_PerOperator()
     }
     {   // CWiseMult
         auto x1 = Leaf(MV({2,3})), x2 = Leaf(MV({5,7}));
-        auto y = Op(GradOp::CWiseMult, {x1,x2}, 1, 2); y->Forward();
+        auto y = Op(GradOp::CWiseMult, {x1,x2}, 2, 1); y->Forward();
         y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
         y->Backward();
         ck.check(AV(x1,0)==5 && AV(x2,1)==3,
@@ -183,7 +184,7 @@ static void TestB_PerOperator()
     }
     {   // Divide (原版 node1 用矩阵乘, 抛异常) —— 期望 1/x2 与 -x1/x2^2
         auto x1 = Leaf(MV({6,8})), x2 = Leaf(MV({2,4}));
-        auto y = Op(GradOp::Divide, {x1,x2}, 1, 2); y->Forward();
+        auto y = Op(GradOp::Divide, {x1,x2}, 2, 1); y->Forward();
         y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
         y->Backward();
         ck.check(std::fabs(AV(x1,0)-0.5)<1e-15 && std::fabs(AV(x1,1)-0.25)<1e-15 &&
@@ -191,13 +192,14 @@ static void TestB_PerOperator()
                  std::string("[B5] Divide -> 1/x2=[0.5,0.25] / -x1/x2^2=[-1.5,-0.5]"));
     }
     {   // Transpose (原版用原值 + `=`, 静默错)
-        auto x = Leaf(MV({1,2}));
-        auto y = Op(GradOp::Transpose, {x}, 2, 1); y->Forward();
-        y->adjoint = MM({{1},{1}});
-        x->adjoint = MV({0,0});
+        auto x = Leaf(MV({1,2}));                  // 2x1 列
+        auto y = Op(GradOp::Transpose, {x}, 1, 2); // 输出 1x2
+        y->Forward();
+        y->adjoint = MM({{1,1}});                  // 1x2
+        x->adjoint = MV({0,0});                    // 2x1
         y->Backward();
-        ck.check(x->adjoint.Rows()==1 && x->adjoint.Cols()==2 && AV(x,0)==1 && AV(x,1)==1,
-                 std::string("[B6] Transpose -> [1,1] 且形状 (1x2) 正确"));
+        ck.check(x->adjoint.Rows()==2 && x->adjoint.Cols()==1 && AV(x,0)==1 && AV(x,1)==1,
+                 std::string("[B6] Transpose -> [1,1] 且形状 (2x1) 正确"));
     }
     {   // SumAll
         auto x = Leaf(MV({2,3}));
@@ -213,15 +215,21 @@ static void TestB_PerOperator()
         y->Backward();
         ck.check(AV(x,0)==3 && AV(x,1)==2, std::string("[B8] MultAll -> [x1,x0]=[3,2]"));
     }
-    {   // MatrixMult: A(1x2)*B(2x1) -> A.adj=[1,2], B.adj=[1;2]
-        auto A = Leaf(MV({1,2}));
-        auto B = Leaf(MM({{1},{2}}));
-        auto y = Op(GradOp::MatrixMult, {A,B}, 1, 1); y->Forward();
-        y->adjoint = MV({1});
-        A->adjoint = MV({0,0}); B->adjoint = MM({{0},{0}});
+    {   // MatrixMult (列向量): y = W·x, W 2x3, x 3x1
+        //   期望 dW = ā_y·xᵀ (2x3 全 1), dx = Wᵀ·ā_y = [5,7,9]
+        //   旧版是 1x2 · 2x1 的点积, 只覆盖了 Row·Col 一种形状; 现改成非方阵, 两侧都查。
+        auto W = Leaf(MM({{1,2,3},{4,5,6}}));
+        auto x = Leaf(MV({1,1,1}));
+        auto y = Op(GradOp::MatrixMult, {W,x}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1});
+        W->adjoint = MM({{0,0,0},{0,0,0}});
+        x->adjoint = MV({0,0,0});
         y->Backward();
-        ck.check(AV(A,0)==1 && AV(A,1)==2 && AV(B,0)==1 && AV(B,1)==2,
-                 std::string("[B9] MatrixMult -> A.adj=[1,2] / B.adj=[1;2]"));
+        ck.check(W->adjoint.Rows()==2 && W->adjoint.Cols()==3
+                 && AV(W,0)==1 && AV(W,5)==1
+                 && std::fabs(AV(x,0)-5)<1e-14 && std::fabs(AV(x,1)-7)<1e-14
+                 && std::fabs(AV(x,2)-9)<1e-14,
+                 std::string("[B9] MatrixMult W(2x3)·x(3x1) -> dW 全 1 / dx=[5,7,9]"));
     }
     {   // Function (原版矩阵乘, 抛异常; 且 Derive(Apply) 依赖种子)
         auto x = Leaf(MV({2,3}));
@@ -234,7 +242,7 @@ static void TestB_PerOperator()
     }
     {   // MatrixFunction
         auto x = Leaf(MV({2,3}));
-        auto y = OpF(GradOp::MatrixFunction, {x}, {FunctionType::Sin, FunctionType::Exp}, 1, 2);
+        auto y = OpF(GradOp::MatrixFunction, {x}, {FunctionType::Sin, FunctionType::Exp}, 2, 1);
         y->Forward();
         y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
         y->Backward();
@@ -244,7 +252,7 @@ static void TestB_PerOperator()
     }
     {   // Output (原版缺 case, 静默 no-op)
         auto x = Leaf(MV({1,2}));
-        auto y = Op(GradOp::Output, {x}, 1, 2); y->Forward();
+        auto y = Op(GradOp::Output, {x}, 2, 1); y->Forward();
         y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
         y->Backward();
         ck.check(AV(x,0)==1 && AV(x,1)==1,
@@ -252,7 +260,7 @@ static void TestB_PerOperator()
     }
     {   // 叶子与常量: 显式 case, 无副作用
         auto x = Leaf(MV({1,2}));
-        auto y = Op(GradOp::Constant, {x}, 1, 2); y->Forward();
+        auto y = Op(GradOp::Constant, {x}, 2, 1); y->Forward();
         y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
         y->Backward();
         ck.check(AV(x,0)==0 && AV(x,1)==0, std::string("[B13] Constant -> [0,0] (不回传)"));
@@ -266,7 +274,7 @@ static void TestC_AutoInit()
 {
     std::printf("\n[C] ComputationGraph::Backward 自动做形状初始化\n");
     auto x = Leaf(MV({2,3}));
-    auto y = Op(GradOp::Output, {x}, 1, 2);
+    auto y = Op(GradOp::Output, {x}, 2, 1);
     ComputationGraph<D> g(x, y);
     g.Forward();
 
@@ -287,7 +295,7 @@ static void TestD_Idempotent()
     std::printf("\n[D] 连跑两次 Backward\n");
     auto x = Leaf(MV({2, 3}));
     auto w = Leaf(MV({5, 7}));
-    auto m = Op(GradOp::CWiseMult, {x, w}, 1, 2);
+    auto m = Op(GradOp::CWiseMult, {x, w}, 2, 1);
     auto y = Op(GradOp::SumAll, {m}, 1, 1);
     ComputationGraph<D> g(x, y);
     g.Forward();
@@ -335,6 +343,59 @@ static void TestE_Placeholders()
 }
 
 // ===========================================================================
+// [F] 分域: 同一份 grad_graph 在 Dual<float> / Dual<Complex<double>> 下各实例化一次
+//     (graphics 3.3 第 1 条: 模板 bug 只在实例化时暴露; 单域探针连续误判过 5 次)
+//     2026-10-17 这两个域只在 /tmp 探针里跑过、没进 ctest —— 本条把证据固化。
+// ===========================================================================
+template <typename T>
+static void RunMinLoopDomain(Checker& ck, const char* tag, double tol)
+{
+    using DQ = Dual<T>;
+    using N  = GradNode<DQ>;
+
+    auto mk = [](double v) { return ScalarTraits<T>::fromReal(v); };
+
+    auto leaf = [&](const std::vector<T>& vs) {
+        std::vector<DQ> d;
+        d.reserve(vs.size());
+        for (const T& v : vs) d.emplace_back(v, ScalarTraits<T>::zero());
+        return std::make_shared<N>(GradOp::Input,
+                                   Matrix<DQ>(static_cast<int>(vs.size()), 1, d));
+    };
+
+    auto x = leaf({mk(2), mk(3)});
+    auto w = leaf({mk(5), mk(7)});
+    auto b = leaf({mk(0.5)});
+
+    auto m = std::make_shared<N>(GradOp::CWiseMult, Matrix<DQ>(2, 1));
+    m->FillInput(x); m->FillInput(w);
+    auto s = std::make_shared<N>(GradOp::SumAll, Matrix<DQ>(1, 1));
+    s->FillInput(m);
+    auto y = std::make_shared<N>(GradOp::Add, Matrix<DQ>(1, 1));
+    y->FillInput(s); y->FillInput(b);
+
+    ComputationGraph<DQ> g(x, y);
+    g.Forward();
+    g.Backward();
+
+    auto near = [&](const T& got, double want) {
+        if constexpr (std::is_same_v<T, Complex<double>>) {
+            return std::fabs(static_cast<double>(got.real) - want) < tol
+                && std::fabs(static_cast<double>(got.imag)) < tol;
+        } else {
+            return std::fabs(static_cast<double>(got) - want) < tol;
+        }
+    };
+
+    const bool ok = near(x->adjoint.Data()[0].value, 5.0)
+                 && near(x->adjoint.Data()[1].value, 7.0)
+                 && near(w->adjoint.Data()[0].value, 2.0)
+                 && near(w->adjoint.Data()[1].value, 3.0)
+                 && near(b->adjoint.Data()[0].value, 1.0);
+    ck.check(ok, std::string("[F] ") + tag + " 最小闭环 dx=[5,7] dw=[2,3] db=1");
+}
+
+// ===========================================================================
 
 int main()
 {
@@ -343,5 +404,10 @@ int main()
     TestC_AutoInit();
     TestD_Idempotent();
     TestE_Placeholders();
+
+    std::printf("\n[F] 分域 (同一份源码换域再实例化)\n");
+    RunMinLoopDomain<float>(ck, "Dual<float>            ", 1e-4);
+    RunMinLoopDomain<Complex<double>>(ck, "Dual<Complex<double>>  ", 1e-12);
+
     return CheckReport(ck.ok, ck.fail, "autodiff/backward");
 }

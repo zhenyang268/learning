@@ -1,7 +1,7 @@
 # AGENTS.md — 项目协作规约（每个 session 自动加载）
 
-> **读者**：编码 agent ｜ **最后更新**：2026-10-14
-> **本文是入口文件**。展开内容按下方「文档地图」**按需读取，不要一次性全读**（`learning.md` 有 43 KB）。
+> **读者**：编码 agent ｜ **最后更新**：2026-10-17
+> **本文是入口文件**。展开内容按下方「文档地图」**按需读取，不要一次性全读**（`learning.md` 约 46 KB）。
 
 ---
 
@@ -21,12 +21,12 @@
 | `11408-notebook/PROGRESS.md` | 11408 学习进度仪表盘（唯一进度真源） | 11408 学习会话开场 |
 | `11408-notebook/AGENTS.md` | 11408 归档规约（对话/照片 → ipynb，只追加） | 归档或判卷照片时 |
 | `learning-408/README.md` | 408 实践代码导航（**主题 → 代码映射真源**：jos/cs144/csapp 子仓索引与阅读指南）｜ 独立子仓，只能按绝对路径访问 | 复习 408 需要引实践代码时，**先读它再引代码，不得凭记忆编造路径** |
+| `docs/env-git.md` | git 写操作被沙箱拒绝的成因与处理（锁文件清单、worktree 补法、`GIT_OPTIONAL_LOCKS` 的适用范围） | git 命令报 `Operation not permitted` / `File exists` 时 |
 
 **真源约定（避免重复维护）**：同一条事实只在一个文件里定义，别处只引用不重述。
-进度 → `dev-progress.md`；工程验收 → `graphics/plan.md`；库设计理由 → `matrix.md`；
-笔记 web 化 → `learning-web` 子仓（规约 `AGENTS.md`、设计 `DESIGN.md`）；
-11408 复习/归档/进度 → `11408-notebook/`（引擎 `LEARNING.md` + 仪表盘 `PROGRESS.md` + 归档 `AGENTS.md`）；
-408 实践代码映射 → `learning-408/README.md`（**引用 408 相关代码一律先查它，不许 agent 瞎猜**）。
+各主题的真源已在上表「内容」列标出，此处不再逐条复述。只额外强调两条：
+**引用 408 实践代码前必读 `learning-408/README.md`**（不许凭记忆编造路径）；
+**git 环境坑只写在 `docs/env-git.md`**。
 
 ---
 
@@ -43,6 +43,16 @@
 因此默认取向是：**严谨优先于速度，直觉优先于形式化。**
 特别复杂或纯技巧性的习题可以降级，但基础概念不允许含糊。
 
+### 工程落脚点与口径
+
+- **多仓结构与进度真源**：见 §一 文档地图 与 §七（子仓各自独立、父仓不跟踪、须绝对路径访问）。
+  用户原话：这些子仓「都是外部的子仓，只是放到一起方便编程」。
+- **不再提起的决定**：`graphics/` 定位偏窄这件事用户已明确决定「保持现状」——
+  **不要再提**，也不要在排期建议里隐含否定它。
+- **两条通用工程事故的本仓实例**（通用规则在用户级 `MEMORY.md`，实例见 `.workbuddy/memory/2026-10-17.md`）：
+  ① 「读—改—写」脚本不幂等 ⇒ `graphics/demo/linalg/expm.cpp` 的 `[E]` 段被插两遍、`redefinition` 构建失败；
+  ② 整文件 Write 覆盖未提交 WIP 后，靠 VSCode 本地历史恢复 `graphics/src/linalg/solve.hpp`（2026-10-14）。
+
 ---
 
 ## 三、命令
@@ -55,7 +65,7 @@ cmake --build graphics/build -j             # 构建 C++ 库与 demo
 ctest --test-dir graphics/build --output-on-failure   # 跑 C++ 测试
 ./graphics/run_tests.sh                     # C++ 测试一键入口(配置+构建+ctest)
                                             #   -c 从零构建 | -d 打各用例内部明细 | -w 开 -Wall -Wextra | -h 帮助
-latexmk -pdfxe -interaction=nonstopmode main.tex   # 编译笔记（notebook/ 下执行；必须 xelatex 引擎——`-pdf` 走 pdfLaTeX 会报 ctex `fontset 'mac' unavailable` 直接卡住等交互输入，2026-09-24 实测）
+latexmk -pdfxe -interaction=nonstopmode main.tex   # 编译笔记（在 math-notebook/ 下执行；引擎坑见 §七）
 bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048"
 ```
 
@@ -65,17 +75,17 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 
 项目文档里大量使用缩写引用，释义如下：
 
-- `B1` / `G3` / `G4` / `H5` / `E1` … = `notebook/<X>_*.tex` 内的 `\subsection{X#.}` 编号
+- `B1` / `G3` / `G4` / `H5` / `E1` … = `math-notebook/<X>_*.tex` 内的 `\subsection{X#.}` 编号
   （`A_analysis`→A、`B_algebra`→B、`C_partial`→C、`D_classic`→D、`E_Field`→E、
   `F_quantum`→F、`G_numeric`→G、`H_cg`→H、`I_fluid`→I、`J_rtx`→J、
   `K_Feyman`→K、`L_Feyman`→L、`M_addition`→M、`P_computation`→P、
   `Q_topology`→Q、`R_complex`→R）
-- `de1`–`de4` = `notebook/diffrential/de*.tex`（拉格朗日/哈密顿篇的「第 N 层」）
-- `lie1`–`lie3` = `notebook/li/lie*.tex`（李群篇）
-  > 注：`B_algbra.tex`、`M_addtion.tex` 原为拼写错误，**已于 2026-09-22 改名为
-  > `B_algebra.tex`、`M_addition.tex`**（`main.tex` 的 `\input` 已同步）。见到旧名按新名理解。
-  > 同类改名还有一处：**「计算必修清单」的九组原记 `G1`–`G9`，因与 `G_numeric.tex`
-  > 的 `G1`–`G5` 撞名，已统一改记为 `P1`–`P9`**（黑板里的旧编号 `G$n$` = 笔记里的 `P$n$`）。
+- `de1`–`de4` = `math-notebook/diffrential/de*.tex`（拉格朗日/哈密顿篇的「第 N 层」）
+  > ⚠️ 目录名 **`diffrential` 就是这么拼的**（少一个 `e`），是真实存在的目录，
+  > **不要「修正」成 `differential`** —— 改了会直接找不到文件。
+- `lie1`–`lie3` = `math-notebook/li/lie*.tex`（李群篇）
+  > 历史改名（`B_algbra`→`B_algebra`、`M_addtion`→`M_addition`、计算必修 `G1`–`G9`→`P1`–`P9`）
+  > 见 `docs/doc-checkup.md` §历史改名记录；见到旧名按新名理解。
 - `§NN.N` = **编译后**的全局章节号（`main.pdf` 里的编号），见下方警告
 - `L0`–`L5` = NS 学习路线关卡（`learning-todo/ns-progress.md`）
 - `V1.1`–`V6.4` = `graphics/plan.md` 的验收项，记作 `V{阶段}.{序号}`
@@ -95,7 +105,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 |---|---|
 | 聊天回复 | Unicode（∑ ∫ √ λ ᵀ）——**不输出裸 LaTeX** |
 | 数学内容文档：`.ipynb`、`learning.md` | KaTeX：行内 `$…$`、行间 `$$…$$` |
-| 工程文档：`matrix.md`、`graphics/plan.md`、`dev-progress.md`、`AGENTS.md`、`README.md` | ASCII：`A^T`（转置）、`A^H`（共轭转置）、`[A,B] = AB − BA`（对易子） |
+| 工程文档：`matrix.md`、`graphics/plan.md`、`dev-progress.md`、`AGENTS.md`、`README.md`、`docs/*.md` | ASCII：`A^T`（转置）、`A^H`（共轭转置）、`[A,B] = AB − BA`（对易子） |
 | C++ 代码与注释 | 同上一行（ASCII） |
 
 **工程文档的统一细则（2026-09-22 起生效）**
@@ -124,8 +134,9 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 ### 输出
 
 - terminal 输出当课堂讲义用；`.ipynb` 当黑板与笔记用。
-- 正式输出写入 `learning-todo/chats/<session-id>.ipynb`：**每次回复追加新的 markdown 单元，
+- **正式输出**写入 `learning-todo/chats/<session-id>.ipynb`：**每次回复追加新的 markdown 单元，
   不修改已经写好的单元**（禁止大规模重写历史内容）。
+- **生成产物**一律进 `learning-todo/`：图片进 `imgs/`，会话记录进 `chats/`。
 - 只有明确要求写代码时才输出代码，不要附带多余的验证性代码。
 
 ### 图像生成（阿里云百炼 CLI）
@@ -155,48 +166,37 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
   父仓不跟踪（无 `.gitmodules`、无 gitlink）。
   → 它们在 `git worktree` 与新的 clone 中**都不出现**，必须用绝对路径访问
   （如 `~/develop/learning/learning-todo/`）；**改动须在各自仓内提交**。
-- **git 的写操作会被执行层拒绝 unlink**，典型输出是
-  `warning: unable to unlink '.../.git/index.lock': Operation not permitted` 加 `fatal: Unable to write new index file`。
-  - **不是仓库问题**：`.git` 没有 `uchg/schg` 标志、没有 ACL、属主可写，
-    且锁文件的 mode/owner 与 shell 新建的文件完全一致；同一路径下 shell 的 `rm` / `mv`
-    （含覆盖已存在文件）都成功 —— **只有 `git` 进程被拒**（可复现）。
-  - **也与"是否免沙箱"无关**：在标记为 `Sandbox bypassed` 的运行里同样出现该报错。
-    环境里存在 `CODEBUDDY_SANDBOX_BROKER_TRACE_ID`，但**具体是哪一层拦的、规则是什么，
-    从进程内看不到** —— 不要臆断成因，直接按下面的办法处理。
-  - **真正的坑是级联**：失败会留下 `*.lock`，之后所有 git 命令报
-    `Unable to create ...: File exists` / `Another git process seems to be running`——
-    看起来像随机失败，其实是前一次失败的回声。
-  - **实测有效的处理**：用 shell `rm -f` 删掉**具体那几个**锁文件
-    （`.git/index.lock`、`.git/packed-refs.lock`、`.git/refs/heads/**/*.lock`、`.git/ORIG_HEAD.lock`），
-    然后**立刻重跑**该 git 命令；循环 3–8 次基本必过（通常第 1 次就过）。
-    **不要用通配符删** —— zsh 在无匹配时会中断整条命令。
-  - `GIT_OPTIONAL_LOCKS=0` 只对纯读命令（`git status`、`git diff`）有意义，
-    对 `commit` / `update-index` / `branch -D` 无效。
-  - **删 worktree 会撞同一个坑**：`git worktree remove` 可能已经删掉了工作目录，却卡在
-    `.git/worktrees/<name>` 上。补法：手动 `rm -rf .git/worktrees/<name>` → `git worktree prune`
-    → 再 `git branch -D <branch>`。
+- **LaTeX 必须走 xelatex**：`latexmk -pdfxe`。若用 `-pdf`（走 pdfLaTeX），ctex 会报
+  `fontset 'mac' unavailable` 并**卡在交互输入**等键盘，命令永远不返回（2026-09-24 实测）。
+- **git 写操作会被沙箱拒绝**：`commit` / `update-index` / `branch -D` / `worktree remove` 都可能报
+  `unable to unlink .../.git/index.lock: Operation not permitted`，并级联出
+  `Another git process seems to be running`（看着像随机失败，其实是前一次失败的回声）。
+  **处理**：用 shell `rm -f` 删掉**具体那一个**锁文件 → **立刻重跑**，循环 3–8 次基本必过。
+  细节（成因、锁文件清单、worktree 补法）→ `docs/env-git.md`；skill `gitsandbox-write-workaround`。
 - 全仓递归 `grep` / `ls -R` 容易被沙箱拒绝 → 改用结构化的文件检索工具。
 
 ---
 
 ## 八、目录用途
 
+> 各仓**职责与状态**见 `README.md` §仓库职责（真源）；本节只记 agent 操作时需要的内部结构。
+
 - `math-notebook/`：LaTeX 笔记（`.tex`，由 `main.tex` 统一 `\input`，已编译 `main.pdf`）
 - `graphics/`：C++ 图形/线代引擎（`src/` 头文件库；`demo/<模块>/` 为 ctest 验收用例，
   一键入口 `run_tests.sh`；`demo/apps/` 为**附加区**——现象演示，不注册 ctest，用 `run_apps.sh` 跑；
   `test/` 是早期 C 实验与 notebook，与 ctest 无关）
-- `learning-todo/`：**独立子仓**，生成产物与待办输出（`chats/`、`imgs/`、`ns-progress.md`、`matrix.md`）
-- `learning-viz/`：**独立子仓**，2026-09-22 起有提交。职责**收窄为计算/生成层**（Flask `/api/viz/*` +
-  ImGui/matplotlib 本地渲染）；**不再承担笔记转换**（`notes_pipeline` 已移出）
-- `learning-web/`：**独立子仓**，2026-09-22 起有提交。笔记 web 化的全部落地：
-  `build/`（转换，Python）+ `graph/`（语义边真源）+ `src/`（Vite 外壳）+ `dist/`（产物，gitignore）
+- `learning-todo/`：生成产物与待办输出（`chats/`、`imgs/`、`ns-progress.md`、`matrix.md`）
+- `learning-viz/`：职责**收窄为计算/生成层**（Flask `/api/viz/*` + ImGui/matplotlib 本地渲染）；
+  **不再承担笔记转换**（`notes_pipeline` 已移出）
+- `learning-web/`：笔记 web 化的全部落地：`build/`（转换，Python）+ `graph/`（语义边真源）
+  + `src/`（Vite 外壳）+ `dist/`（产物，gitignore）
 - `11408-notebook/`：11408（政治/英一/数一/408）考研学习体系，五件套分工
   （`AGENTS.md` 归档规约 + `LEARNING.md` 学习引擎 + `TOOLKIT.md` 图技能 + `modules/` 模块路线，
   真源约定见其内部文件地图）。**只追加 ipynb，不改已有单元**
-- `learning-408/`：**独立子仓**，408 实践代码汇总仓。本体只保留一份**主题 → 代码导航**（`README.md`），
-  三个实践子仓 `jos/`（操作系统）、`cs144/`（网络）、`csapp/`（组成）被其 `.gitignore` 忽略、各自独立管理。
-  **复习 408 要引实践代码时，先读 `learning-408/README.md` 定位子仓与文件路径，禁止凭记忆编造代码引用。**
-- 三者的关系与路径坑见第七节；依赖约定：两个子仓都不建自己的 `pyproject.toml`，
+- `learning-408/`：408 实践代码汇总仓。本体只保留一份**主题 → 代码导航**（`README.md`），
+  三个实践子仓 `jos/`（操作系统）、`cs144/`（网络）、`csapp/`（组成）被其 `.gitignore` 忽略、各自独立管理
+- `docs/`：外移文档（`env-git.md` 环境坑、`doc-checkup.md` 低频体检清单）
+- **四个子仓与父仓的关系、路径坑**见第七节；依赖约定：**子仓都不建自己的 `pyproject.toml`**，
   `uv add` 会写进**父仓** `pyproject.toml` + `uv.lock`
 
 ---
@@ -207,13 +207,12 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 - **`Matrix<T>` 的既定设计**（哑容器、不加缓存层、不把算法塞进类、实复差异只走 traits）：
   这些已在 `matrix.md` 里定稿并给出理由。需要改设计，**先改 `matrix.md` 并写清理由**，再动代码。
 - **已写好的 `.ipynb` 单元**：只追加新单元，不重写旧单元。
-- **新增要求, notebook目录下的笔记非明确指示, 不进行修改了**
+- **`math-notebook/` 下的笔记**：非明确指示，不要修改。
 
 ---
 
-## 十、输出与提交
+## 十、提交
 
-- 生成产物一律进 `learning-todo/`：图片进 `imgs/`，会话记录进 `chats/`。
 - **未经明确要求不要 `git push`**；在工作区内可以正常 `git add` / `git commit`。
 - 提交信息用中文短句，说明**做了什么**，而不是罗列改了哪些文件。
 
@@ -226,19 +225,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 
 ---
 
-## 十二、文档体检（会话收尾时顺手做）
+## 十二、文档体检
 
-低频即可（每次大改后，或每月一次）。下面每一条都是**本仓已经发生过**的漂移类型：
-
-1. **`dev-progress.md` 的勾选/复述 ↔ `learning-todo/ns-progress.md`**
-   —— 数学线明细只能存在于后者，前者只留指针。（2026-09-23 修过一次：§4 的 `- [ ]` 清单长期挂着
-   「外测度未学」，与 §0 指针矛盾。）
-2. **入口文件体积** —— 本文件目标 ≤ 15 KB；`learning-web/AGENTS.md` 超阈值时按其 §11 把「设计」
-   外移到同仓 `DESIGN.md`，入口只留规约与指针。
-3. **状态措辞 ↔ 文件实际存在** —— 「空仓 / 待建 / 无提交」这类话，子仓一有提交就要同步
-   本文件第八节与 `README.md` 的仓库职责表。
-4. **待办草案 ↔ 已落地内容** —— `.opencode/plans/`、`learning-todo/` 里的草案一旦落进
-   `notebook/*.tex`，立刻标注「已完成」并指向真源，避免留下第二份过期等效数据。
-5. **代号层级** —— 出现 `X#.k.j` 三级写法即错误（只到两级）。
-6. **`learning.md`（46 KB）** —— 目前靠「只读相关阶段」的约定控制成本；若将来拆成目录分文件，
-   所有引用它的文档要同步。
+**低频**（每次大改文档后，或每月一次），不必每个 session 做。7 类历史漂移、对应改法、
+以及历史改名记录（`B_algbra`、`G1`–`G9`、`notebook/` 等）→ `docs/doc-checkup.md`。

@@ -3,6 +3,7 @@
 #include <vector>
 #include <stdexcept>
 #include <functional>
+#include <string>       // CheckFuncMatrixShape 的报错信息
 #include <cmath>        // 标量域的 sin/cos/exp/log/sqrt (elemFunc)
 #include "core/common.hpp"
 #include "core/matrix.hpp"
@@ -30,6 +31,29 @@ T elemFunc(T x, FunctionType f)
         case FunctionType::Sqrt: { using std::sqrt; return sqrt(x); }
     }
     return x;   // FunctionType 已全覆盖; 此行只为满足返回路径 (将来加枚举时 -Wswitch 会报警)
+}
+
+// ---- 函数矩阵的形状契约 (2026-10-19, 列向量翻案时修的真 bug) ----
+//
+// 旧版比较的是 `A.Cols() != f.Cols()` —— 那是**行向量**约定下的"长度"。列向量下
+// A 是 n×1、f 也是 n×1, Cols() 恒为 1, 这个检查退化成 "1 == 1 永远通过";
+// 于是 n 与 f 的长度不一致时**不抛**, 一路走到 `f.Data()[i]` 越界读 (实测确认)。
+//
+// 现契约与向量方向无关:
+//   · f 是 1x1  -> 广播到 A 的每一格
+//   · 否则      -> 必须与 A **同形** (Rows 与 Cols 都比)
+// 这样行向量/列向量/批量矩阵三种输入都被同一个判据覆盖。
+template <typename T, typename U>
+void CheckFuncMatrixShape(const Matrix<T>& A, const Matrix<U>& f, const char* who)
+{
+    if (f.Rows() == 1 && f.Cols() == 1) return;          // 单函数: 广播
+    if (f.Rows() != A.Rows() || f.Cols() != A.Cols()) {
+        throw std::invalid_argument(
+            std::string(who) + ": 函数矩阵形状与 A 不一致 (A " +
+            std::to_string(A.Rows()) + "x" + std::to_string(A.Cols()) + ", f " +
+            std::to_string(f.Rows()) + "x" + std::to_string(f.Cols()) +
+            "; 只允许 1x1 广播或同形)");
+    }
 }
 
 // ---- Apply 的重载分裂 (2026-10-16) ----
@@ -72,10 +96,7 @@ Matrix<Dual<T>> Apply(const Matrix<Dual<T>>& A, const Matrix<FunctionType>& f)
         return Apply(A, f(0, 0)); // 单函数退化为统一应用 (落回 (1))
     }
 
-    // 应该只有一维, 但是后续计算图节点打包可能涉及多行
-    if (A.Cols() != f.Cols()) {
-        throw std::invalid_argument("Matrix apply dimension mismatch!");
-    }
+    CheckFuncMatrixShape(A, f, "Apply");
 
     Matrix<Dual<T>> B(A.Rows(), A.Cols());
     for (int i = 0; i < A.Size(); i++) {
@@ -94,10 +115,7 @@ Matrix<T> Apply(const Matrix<T>& A, const Matrix<FunctionType>& f)
         return Apply(A, f(0, 0)); // 单函数退化为统一应用 (落回 (2))
     }
 
-    // 应该只有一维, 但是后续计算图节点打包可能涉及多行
-    if (A.Cols() != f.Cols()) {
-        throw std::invalid_argument("Matrix apply dimension mismatch!");
-    }
+    CheckFuncMatrixShape(A, f, "Apply");
 
     Matrix<T> B(A.Rows(), A.Cols());
     for (int i = 0; i < A.Size(); i++) {
@@ -198,4 +216,79 @@ Matrix<Dual<T>> MultAllBackward(const Matrix<Dual<T>>& A)
         out.Data()[i] = Dual<T>(total, pre[i] * suf[i]);
     }
     return out;
+}
+
+// ===========================================================================
+// 分子布局雅可比 (D19 第二次修订, 2026-10-19)
+// ===========================================================================
+//
+//   f: R^n -> R^m, x 是 n×1 **列**向量, y = f(x) 也是 m×1 列向量
+//   J_ij = ∂y_i/∂x_j, 形状 **m×n** (行 = 输出分量, 列 = 输入分量)
+//
+// 一次前向 sweep (种子 e_j) 填 J 的**第 j 列** —— 这是与旧口径的唯一实质差别
+// (旧: 分母布局 n×m, 一次 sweep 填第 i 行)。
+//
+// 为什么翻案 (D19 第二次修订的三条理由):
+//   1) 链式法则回到自然序 J_{f∘g} = J_f·J_g (旧口径是 J_g·J_f, 镜像);
+//   2) 标量输出 f: R^n -> R 时 J 是 1×n 行, 梯度 = J^T 是 n×1, 与被微对象 x 同形;
+//   3) autodiff 与 linalg 从此同一套口径, 交界处不再需要显式转置。
+//
+// 判据 (demo/autodiff/jacobian.cpp): 解析 / 中心差分 / 图反向 三方对拍。
+
+template <typename T, typename F>
+Matrix<T> Jacobian(F f, const Matrix<Dual<T>>& x, int m)
+{
+    if (x.Cols() != 1) {
+        throw std::invalid_argument(
+            "Jacobian: x 必须是 n×1 列向量 (收到 " + std::to_string(x.Rows()) +
+            "x" + std::to_string(x.Cols()) + ")");
+    }
+    if (m < 0) {
+        throw std::invalid_argument("Jacobian: m 不能为负");
+    }
+
+    const int n = x.Rows();
+    Matrix<T> J(m, n);
+
+    for (int j = 0; j < n; j++) {
+        Matrix<Dual<T>> seed = x;                        // 拷贝: 不改调用方的 x
+        for (int i = 0; i < seed.Size(); i++) {
+            seed.Data()[i].derive = ScalarTraits<T>::zero();
+        }
+        seed.Data()[j].derive = ScalarTraits<T>::one();  // 种子 e_j
+
+        const Matrix<Dual<T>> y = f(seed);
+        if (y.Cols() != 1 || y.Rows() != m) {
+            throw std::invalid_argument(
+                "Jacobian: 输出必须是 m×1 列向量 (声明 m=" + std::to_string(m) +
+                ", 实得 " + std::to_string(y.Rows()) + "x" +
+                std::to_string(y.Cols()) + ")");
+        }
+        for (int i = 0; i < m; i++) {
+            J(i, j) = y.Data()[i].derive;                // 填**第 j 列**
+        }
+    }
+    return J;
+}
+
+// 不给 m 的版本: 先用全零种子跑一次拿输出形状 (顺手校验输出是列向量)
+template <typename T, typename F>
+Matrix<T> Jacobian(F f, const Matrix<Dual<T>>& x)
+{
+    if (x.Cols() != 1) {
+        throw std::invalid_argument(
+            "Jacobian: x 必须是 n×1 列向量 (收到 " + std::to_string(x.Rows()) +
+            "x" + std::to_string(x.Cols()) + ")");
+    }
+    Matrix<Dual<T>> probe = x;
+    for (int i = 0; i < probe.Size(); i++) {
+        probe.Data()[i].derive = ScalarTraits<T>::zero();
+    }
+    const Matrix<Dual<T>> y0 = f(probe);
+    if (y0.Cols() != 1) {
+        throw std::invalid_argument(
+            "Jacobian: 输出必须是列向量 (实得 " + std::to_string(y0.Rows()) +
+            "x" + std::to_string(y0.Cols()) + ")");
+    }
+    return Jacobian(f, x, y0.Rows());
 }

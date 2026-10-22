@@ -15,16 +15,16 @@
 
 ## 0. 当前指针（每次会话先看这里）
 
-> **数学线在 L1（测度与积分）中段；工程线在 `graphics` 阶段 1 收口期 —— linalg 8 文件全部落地、每个公开入口都在 double 与 Complex 下实例化过（ctest **13/13**，含 autodiff 的 `apply` / `backward`），V1.1/V1.2/V1.3/V1.4/V1.5/V1.6 六条已验收，**只剩 V1.7（纯演示，用户已定「先不管」）**（见第 3 节）。**
+> **数学线在 L1（测度与积分）中段；工程线在 `graphics` 阶段 2 进行期 —— V1.1–V1.6 全验收 + V2.4（Padé 一半）✅ + pyapps 两系列十二脚本落地（球面 G1–G6 + 旋转 R1–R6，图 13 张），ctest **16/16**（autodiff 新增 `jacobian` 18 项；`quat` 59 项；`so3` 51 项）；库侧剩 quat 实函数 / LinearOperator / classify 三件（见 §4）。**
 
 | 线 | 当前位置 | 下一个动作 |
 |---|---|---|
 | **数学（优先）** | L1 第 3 关进行中 —— **明细见 `learning-todo/ns-progress.md` 的「📍 当前位置」**（本表不重复记录） | Vitali 不可测集 → Carathéodory 判据 → 积分四步构造 |
-| **工程** | `graphics` **「下一版基线」= fb0e78b + ctest 13/13（2026-10-17 03:00 定）**：阶段 1 收口期，linalg 8 文件 + autodiff（Apply 域分裂/反向模式）全部落地，V1.1–V1.6 六条验收，S6 三支线定案（`Dot`/`MatrixType`/`qr_inverse`）。**下一版目标 = 可视化 demo 期（阶段 2 收窄版）**，库侧三件 + demo 侧三刀，见 §4「下一版基线」块 | **库侧三件**（都为可视化服务）：① `quat/quaternion.hpp`（Slerp/万向锁 demo 的本体）② `operator.hpp` 扩 `LinearOperator`（`DifferentiationMatrix`/`LaplacianMatrix`——弦/鼓膜/热模糊 demo 的本体，G 系列 Python 版的对拍源）③ `classify.hpp` + `qr_inverse` 回代（收编 inverse.hpp 的 is_* 探测，V2.3/S-App6 顺手清）。**demo 侧**：lie 刀 4/5/6（expm.cpp 续写）→ D2 CLT（pyapps）→ G 系列 .py 源入 `demo/pyapps/`（图已出但源未入库） |
-| **小项目** | 未解锁 | 等 Gate A（见第 2 节） |
-| **扇面（并行，2026-10-14 起）** | 「先铺开再收束」模式启用：四扇面 + 谱枢纽，真源 = **`learning-todo/fan-plan.md`**；**2026-10-17 分层调整**：纯 Python 切片挂 **`graphics/demo/pyapps/`**（viz 层暂缓启用，绑定方案已备）；C++ 薄封装走 `graphics/plan.md` S-App 清单 | 开局三刀：① A1 弦的模态（C++ 版已出 = `demo/apps/string_modes`，Python 版挂 pyapps）② S5 expm ✅（下一刀 = lie 刀 4/5/6）③ D2 CLT 动画（pyapps）；**G 系列（球面测地线入门旋转/张量/曲率）2026-10-17 新增**，G1–G3 零依赖可开；收束判据钉死在 fan-plan §7 |
-| **李群线（扇面 A4 的展开，2026-10-15 起）** | 用 `expm` 走通「李代数→李群」：**八刀路线**，真源 = **`learning-todo/lie-plan.md`**；刀 1 = S5（主线停点，V1.6），刀 2–8 是扇面加餐。含**能/不能数值落地的分界**（表示论、根格、π₁ 标注回 `li1–li3.tex` / `Q_topology.tex`） | **刀 1/2/3 已落地**（2026-10-16：`demo/linalg/expm.cpp` 16 项判据 —— expm 本体 / `[Ji,Jj]=ε_ijk Jk` 判精确 0 / **三线对拍**（级数·谱·Rodrigues）≤1.2e-15 + 几何与 Jacobi 超强判据；V1.6 已验收）。下一步 **刀 4**：θ 扫 [0,4π] 证 exp 非单射（含 `exp(2π[u]×)=I` 已先行 · 刀 6 BCH 测阶 也是低成本下一刀） |
-| **笔记 web 化** | `learning-web` 已落**规约 + 设计 + 目录骨架**（`AGENTS.md` / `DESIGN.md` / `build/` / `graph/`），实现未开工 | 按 `learning-web/AGENTS.md` §12 第 1 步：`uv add --dev pypandoc-binary` |
+| **工程** | `graphics` HEAD `aac7b27`（**V2.4 Padé 一半 ✅**，expm_pade = [13/13] scaling），ctest **16/16**（`quat` 59 项，9 个入口仍占位 throw；**新增 `so3` 51 项**）+ **autodiff 布局翻案**（全库列向量 + 分子布局，新增 `jacobian` 18 项）。**2026-10-20 上午新增 `src/linalg/so3.hpp`**（`Cross` / `Hat` / `Vee`，只依赖 `core/matrix.hpp`）—— 四元数 `operator*` 与 `Rotate` 的叉积抽层落点，**`quat/` 故意不 include 它**（D16）。**2026-10-17 上午 pyapps 两系列落地（未提交，整目录 untracked）**：`demo/pyapps/sphere/` **G1–G6**（`_core.py` = 度规/Γ/黎曼/RK4/平行移动公共层，六脚本全过：K 偏离 1 仅 4.4e-14、holonomy 对拍 1.7e-11°）+ `demo/pyapps/rotation/` **R1–R6**（五表示互转/万向锁/Slerp，`_rot_core.py` 15 组自检；**R2 已含四元数全套数学**）；图 13 张 → `learning-todo/imgs/{geo,rot}/`（rot 6 张未提交）。数学侧两次口径修正已入 fan-plan（G3 极角/纬度、R 系判据病态 atan2） | ① **lie 刀 4/5/6**（expm.cpp 续写；**R2 已把刀 4 的双覆盖 Python 前哨做掉**——`M(q)=M(−q)`）② **N2 `math/ode.hpp`**（Gate A 最后一块积木；**G 系列 `_core.py` 已手写 RK4，即现成对拍源**）③ **B1 quat 实函数**（骨架已立，`operator*` ✔，9 个入口待实现）④ **B2 LinearOperator**（弦/鼓膜/热模糊本体） |
+| **小项目** | 未解锁 | 等 Gate A（= matrix ✔ + linalg ✔ + **一个积分器** ← 就差 ode.hpp） |
+| **扇面（并行）** | 真源 `learning-todo/fan-plan.md`（§3.1 G / §3.2 R 已含实测状态与口径警告）；**A5「四元数」pyapps 预演完成**（R1–R6），A1 C++ 版已出（string_modes） | **扇面收束计分（§7）**：A 面 **3 条 ✔**（G+R+string，超额）；B/C/D 面 0 条 → **D2 CLT 动画是下一优先**（D 面第一条 + 特征函数困惑的正解）；C 面 C1 共形映射可顺延 R/G 经验 |
+| **李群线（扇面 A4 的展开）** | 刀 1/2/3 已落地（V1.6 ✅）；刀 4 的双覆盖 Python 前哨已在 R2 完成一半（`M(q)=M(−q)` + 漂移 √n·eps） | **刀 4/5/6**（expm.cpp 续写）：θ 扫 [0,4π] 非单射 + **SU(2) 双覆盖 C++ 版**（θ=2π 处 `−I`）+ BCH 测阶（缩半降 8 倍） |
+| **笔记 web 化** | ✅ **已完成**（父仓此前漏记，2026-10-17 补正实况）：`learning-web` 独立仓 **139 次提交**、**json 词条 318/318 全入库**、前端四层实现齐全（`shell`/`renderers`/`modules`/`viz` 27+ 档1 模块）+ `dist/` 产物（`index.html` / `knowledge.html` / `graph/` / `json/`）已出，**2026-10-04 收工**（HEAD `3ec63a6`）| 无（已收束）；后续按需加餐，不占主线 |
 
 > **2026-09-22 修正**：本表原先写「L1 第 3 关 —— 外测度已学、勒贝格积分刚学」，
 > 与 `ns-progress.md` 的「外测度 / Carathéodory **未接触**」**互相矛盾**。
@@ -59,7 +59,7 @@
 ## 3. 现状明细（截至 2026-10-15）
 
 - **数学线**：**只以 `learning-todo/ns-progress.md` 为准**，本文不重复关卡明细。
-- **工程线**（`graphics`，分支 `graphics_0`；2026-10-17 实地盘点到 ctest 13/13）：
+- **工程线**（`graphics`，分支 `graphics_0`；2026-10-19 实地盘点到 ctest 15/15）：
 
   **linalg 已全部落地、且每个公开入口都真的进过编译器** —— 2026-10-14 那次「528 行从未被任何 TU
   include」的体检问题，已随 S1–S6 全部修复；当时 32 个编译错误的逐条明细保留在 §6 的
@@ -81,7 +81,7 @@
   `EntryTable<T>` 对 40 个公开入口取函数指针（odr-use ⇒ 强制实例化）+ 54 项最小数值判据，
   double 与 Complex 各跑一遍 —— **这是 V1.1 的显式证据**。
 
-  - **测试入口**：`./graphics/run_tests.sh` → ctest **13/13**、构建 0 告警 0 错误
+  - **测试入口**：`./graphics/run_tests.sh` → ctest **16/16**、构建 0 告警 0 错误
     （含 `-c -w` 从零 + `-Wall -Wextra` 复验）；附加区 `./graphics/run_apps.sh`
     （`demo/apps/`，**不注册 ctest**，首个成员 `string_modes`，即 fan-plan 扇面 A1 的 C++ 版）。
   - **V1 验收落点**（`graphics/plan.md` 的 V1.1–V1.7，逐条）：
@@ -168,7 +168,7 @@
 > `dual_complex`（V1.5）+ `expm.cpp`（V1.6）+ apps 附加区与 `run_apps.sh`，ctest 10/10）**；
 > `HEAD = 6999ca2`，**均未 push**。过程明细见 §6；**当前缺口只剩下面两条。**
 
-**V1 剩余两步（V1.1–V1.6 已全部验收，ctest 13/13）**：
+**V1 剩余两步（V1.1–V1.6 已全部验收，ctest 16/16）**：
 
 - [x] **① V1.5 用例 `demo/linalg/dual_complex.cpp`** —— ✅ 已完成（2026-10-16）：`demo/common.hpp`
       补 `RandFill<Dual<Complex<U>>>` 特化（原 `RandFill<Dual<U>>` 的 `static_cast<U>(a)` 在
@@ -202,6 +202,58 @@
 - [ ] **遗留（不阻塞 V1 收口）**：`src/core/perspective.hpp` / `rotate.hpp` 旧接口未处置
       （阶段 1 重写 matrix 时本应一并处理）。
 
+### 下一版基线（2026-10-17 03:00 定，以「可视化 demo」为目标）
+
+**基线原点 = `fb0e78b` + ctest 13/13**（含本日 03:00 修复：`expm.cpp` 的 `E_pade_vs_taylor`
+误贴两份导致编译炸，删重复块后全绿；备份 `/tmp/expm.cpp.wipbak`）。**收基线纪律：动过
+demo/ 或 src/ 的会话结束前必跑 `run_tests.sh`，全绿才作数。**
+
+阶段 2 收窄为「可视化 demo 期」——qr/cholesky/expm 三个阶段 2 库件已提前完成，剩下的
+库侧缺口按「服务哪个可视化 demo」倒排：
+
+**库侧三件（要加进底层库的全部）**：
+
+- [ ] **B1 `src/quat/quaternion.hpp`**（~150 行）：四元数四则、↔旋转矩阵互转、Slerp。
+      为谁服务：**Slerp 插值 demo**（匀速大圆）+ **万向锁 demo**（V2.5/V2.6，姿态演示的
+      唯一缺口）。注意 D16：四元数封死 quat/ 目录、不做矩阵元素。验收 V2.5/V2.6 归
+      `graphics/plan.md`（阈值不动）。
+      - **2026-10-17 09:34 骨架已立**：`src/quat/quaternion.hpp`（新目录）+
+        `demo/quat/quaternion.cpp`（ctest `quaternion`，32 项 FAIL 0；ctest 13/13 → **14/14**，
+        `-c -w` 0 告警）。**已实现**：① 的 `+ - 一元- 标量乘` + ② 的
+        `Conjugate / SquaredNorm / Norm` + `Identity()`。**全部占位（`throw std::logic_error`）**：
+        `operator*`（Hamilton 积 = 第 ① 步的魂）、`Inverse` / `Normalize`、
+        `FromAxisAngle` / `ToMatrix` / `FromMatrix`（Shepperd 四分支）/ `Rotate`、
+        `Slerp` / `Nlerp` / `AngleOf` —— 共 **10 个入口**，用例用 [P1]–[P10]
+        **如实钉住"仍不可用"**（照 `smoke.cpp` 对 `qr_inverse` 的规矩：实现掉一条，对应 [P] 变红，
+        红就是提醒换成真判据）。四步划分、每步判据、易错点写在头文件注释里。
+        域守卫：类内 `static_assert(is_floating_point_v<T>)`，实测 `Quaternion<int>` 与
+        `Quaternion<Complex<double>>` 均被拦下并给出中文原因。
+- [ ] **B2 `src/linalg/operator.hpp` 扩正体**（现在只有 Dot/Abs2 暂驻）：
+      `LinearOperator` + `DifferentiationMatrix`（多项式基，移位阵）/ `LaplacianMatrix`
+      （1D 三对角 / 2D 五点差分，Dirichlet）工厂。为谁服务：**弦模态 Python 版的对拍源**、
+      鼓膜 Chladni（C4）、热模糊（C3）—— 全部阶段 4 demo 的矩阵本体；G 系列 Python
+      手写的离散 Laplacian 将来要跟它对拍。验收 V2.7 归 plan.md。
+- [ ] **B3 `src/linalg/classify.hpp` + 收编**：`Classify(A)` + `Inverse(A, hint)` 快速路径，
+      把 `inverse.hpp` 里散住的 `is_diagonal/is_orthogonal/is_positive_definite` 搬进来
+      收编成结构探测层（V2.3）；`qr_inverse` 回代已落地（S-App6 ✔），此刀只做搬家不动数值。
+      为谁服务：让「结构 → 快速路径」的语义有个正式的家（教学价值 > demo 价值，顺位可后）。
+
+**demo 侧（刀序）**：
+
+- [ ] **D1 lie 刀 4/5/6**（`expm.cpp` 续写，半天）：θ 扫 [0,4π] 非单射 + **SU(2) 双覆盖**
+      （θ=2π 处 `−I` vs `I`，lie-plan 收束判据）+ BCH 测阶（缩半降 8 倍）。
+- [ ] **D2 `demo/pyapps/clt.py`**（D 扇面第一条，纯 numpy）——图已出过概念版，本刀是
+      「有图 + 有判据」的正式版（φⁿ(t) 逐点趋 e^{−t²/6}）。
+- [ ] **D3 G 系列 .py 源入库 `demo/pyapps/`**：图已出（`learning-todo/imgs/geo/` 7 件，
+      子仓 `5580227`）但 **.py 源没进版本库**——按 pyapps 纪律（文件名=演示名、
+      头部三行注释）收编 great_circle/geodesic_eq/parallel_transport 三件。
+- [ ] **D4 quat demo**（等 B1）：Slerp 轨迹 + 万向锁复现（apps 或 ctest 按 V2.5/V2.6 定）。
+- [ ] **D5 V1.7 rotate demo**（apps，纯演示，用户此前「先不用管」，随时可做）。
+
+**不进本基线**（明确排除，防范围蠕变）：pybind11 绑定（等第一个联动 demo 触发）、
+SDL2/gfx 骨架（等 Gate A）、lstsq/pinv 薄封装（S-App3/4，等 PCA/拟合 demo 真要）、
+Hessenberg 非对称特征值（plan.md 明确缓做）。
+
 **扇面线（并行，不阻塞主线）**：`graphics/plan.md` 的 **S-App1–5**（PCA / 牛顿法 / 伪逆 / lstsq /
 旋转扇面）+ `learning-todo/fan-plan.md` 的四扇面。收束条件见 fan-plan §7 —— 扇面件必须带对拍断言，
 否则就退化成抄 demo。
@@ -213,13 +265,94 @@
 - [ ] Gate A 达成 → 启动第一个小项目（动力系统可视化）
 - [x] ~~第一个小项目完成 → 拉 `viz` / `web` 多仓基建~~
       → **已提前至 2026-09-22**：不等 Gate A，直接以「笔记 web 化」启动两仓（理由见第 6 节日志）
-- [ ] 笔记 web 化 A1 垂直切片走完七步（`learning-web/AGENTS.md` §12 / `DESIGN.md` §5）
+- [x] ~~笔记 web 化 A1 垂直切片走完七步（`learning-web/AGENTS.md` §12 / `DESIGN.md` §5）~~
+      → **✅ 已远超目标完成（2026-10-17 补记）**：不止 A1，**318/318 全部单元**入库、
+      前端四层 + `dist/` 产物齐全，独立仓 139 次提交、2026-10-04 收工。
+      （父仓此前指针停在「实现未开工」，是 2026-09-24 骨架期写下的过期状态，已订正。）
 
 ---
 
 ## 6. 进度日志（append-only：只追加，不修改历史条目）
 
-### 2026-10-17
+### 2026-10-19（autodiff 布局翻案：分子格式 + 列向量输入输出）
+
+- **用户令**：「重新搞我的 autodiff，换成分子格式和列向量输入输出」→「好的全改，代码文档全部同步，
+  还要检查测试用例是否有问题以及是否符合规定」。这是 **D19 第二次翻案**（10-01 定、10-07 第一次修订）。
+- **诊断阶段两条实测（决定工作量分布）**：
+  - **`MatrixMult` 的伴随公式本来就与布局无关** —— 未改一行库代码，直接用列向量
+    `W(2×3)·x(3×1)` 跑通：前向 `[6,15]`、`dW` 2×3 全 1、`dx=[5,7,9]`。原因：y=AB 的
+    Ā=āBᵀ、B̄=Aᵀā 在两种约定下形式相同，翻案只换"谁是 A 谁是 B"。
+  - **`Apply(A, f)` 的形状检查在列向量下失效**：`A.Cols()=1 == f.Cols()=1` 恒真 ⇒ 长度不符
+    不抛错、按 `A.Size()` 读 `f.Data()[i]` **越界**。这是潜伏 bug，不是风格问题。
+- **库侧改动（2 行 + 1 个新函数）**：
+  - `jacobian.hpp`：形状检查换成 `CheckFuncMatrixShape`（1×1 广播 / 否则**逐维**同形），
+    报错信息带两边形状。
+  - `jacobian.hpp` 新增 **`Jacobian(f, x[, m])`**：分子布局 `J_ij = ∂y_i/∂x_j`，形状 m×n，
+    一次 sweep 填**第 j 列**；x 非列向量 / 输出非列向量 / m 不符均 throw。
+    —— 此前 `jacobian.hpp` 里**根本没有 `Jacobian()` 函数**，分子布局长期是句没有代码承载的口号。
+  - `grad_graph.hpp`：**代码零改动**，只改注释（布局说明块、MatrixMult 的 Forward/Backward 推导）；
+    顺带把 `Inverse` Forward 过期的「待 linalg::Inverse 落地」改成「本节点未接入（linalg::Inverse 已可用）」。
+- **测试全部转列向量**：`apply.cpp`（11 处非 1×1 构造 + [F] 形状判据改 Rows）、
+  `backward.cpp`（helper `MV` + 13 处维度实参 + Transpose 形状 + **MatrixMult 换成非方阵
+  W(2×3)·x(3×1)**，两侧都查）、`compute_graph.cpp`（**整文件重写**：3 处构造 +
+  56 处 `[0][k]`→`[k][0]` + `Cols()`→`Rows()`，顺带 **float→double**，
+  差分步长 h=1e-2 → 1e-6、eps 1e-3 → 1e-8）。
+- **新增 ctest `jacobian`（18 项）**：形状 m×n + 逐元解析 + 中心差分 + **链式法则自然序
+  `J_{f∘g}=J_f·J_g`**（分子/分母的判别式）+ **图反向逐元对拍**（seed e_i ⇒ x.adjoint 是 J 第 i 行）
+  + 退化（m=1 的 1×n 行 / n=1）+ 非法输入 throw；double 与 float 双域。
+- **审计发现并修掉的用例问题（3 条）**：
+  1. **`[P1] operator* 仍是占位` 已红** —— 用户 10-17~10-19 之间实现了 Hamilton 积。
+     这正是占位判据的设计意图（实现即变红）。已按设计**升级为真判据 [C1]–[C14]**：
+     9 条基元乘法表 + 反交换 + 单位元/结合律/分配律 + **共轭反自同构 (ab)*=b*·a*** +
+     **范数乘性 |ab|²=|a|²|b|²** + 同轴相加 q(θ1)q(θ2)=q(θ1+θ2) + **双覆盖 q(θ+2π)=−q**。
+     理由：叉积符号写反时往返测试抓不到（正反抵消），只有这组能钉死约定。`quat` 32 → 59 项。
+  2. **`backward.cpp` 只跑 `Dual<double>` 一个域** —— 违反 graphics 3.3 第 1 条（分域探针）。
+     10-17 对 float / `Dual<Complex<double>>` 的验证只存在于 `/tmp` 探针、**没进 ctest**。
+     已补 `[F]` 段：同一份 grad_graph 换域再实例化，两域各跑最小闭环。29 → 31 项。
+  3. **`apply.cpp` 的 [F] 段只测"不匹配会抛"，没有反向对照**。已补 [F3]：1×1 函数矩阵
+     必须**广播不抛** —— 否则"见到非同形就抛"也能让 [F1] 通过，判据不独立。
+- **验证**：ctest **15/15**；`-c -w` 从零 + `-Wall -Wextra` **0 告警 0 错误**。
+- **文档同步**：`matrix.md` §7.4 全节重写（保留 10-07 历史 + 新增 10-19 第二次修订六条）+
+  决策表 #19 + 头部增量 + §6 雅可比表 + §6 Field 展平 + §7.5 第 2 条接口公式；
+  `dev-progress.md` §0 头部/工程行/§3/§6；`MEMORY.md` 新增 §3.10 布局约定。
+- **未提交**，`HEAD = aac7b27`。
+
+### 2026-10-17（晚 · 状态真源订正：learning-web 早已完成）
+
+- **订正事件**：用户指出「learning-web 不是完成了吗」——核查属实，**是父仓真源漏记**。
+  - **实况（`learning-web` 独立仓核验）**：HEAD `3ec63a6`（2026-10-04 14:33），
+    **提交总数 139**；`json/` 词条 **318/318 全入库**（与 `HANDOFF-json.md` 的「85/318」
+    快照已隔 233 单元）；前端四层全实现（`src/shell` / `renderers` / `modules` / `viz`
+    含 27+ 档1 模块）；`dist/` 产物齐全（`index.html` / `knowledge.html` / `graph/` / `json/`）；
+    `git status` **干净**（无未提交）。
+  - **根因**：本文件 §0 指针表「笔记 web 化」行是 **2026-09-24 骨架期**写下的
+    「实现未开工」，此后 web 仓在 **9/24–10/04 密集推进并收工**（9/25 单日 93 次提交），
+    但**从未回写父仓** —— §5 里程碑的 `[ ] A1 垂直切片走完七步` 也一直空挂着。
+    本次按实况补齐 §0 该行 + §5 该条，并同步 ctest 计数 13/13 → **14/14**（`quat` 骨架已立）。
+  - **教训**：独立子仓的完成事件**必须由该仓会话主动回写父仓**，否则父仓真源会长期停在
+    启动态；引用子仓状态时**以 `git log` + 目录实况为准，不照抄父仓摘要**（本次即栽在这）。
+  - 纯文档改动，无代码/数据变更。
+
+### 2026-10-17（上午 · R/G 两系列落地后的文档同步）
+
+- **实测盘点（09:23）**：`git log` 显示 `aac7b27`（expm_pade，**V2.4 Padé 一半 ✅**，
+  [E] 段 16→25 项：相对差 5.3e-16 ~ 1.5e-13、幂零逐位精确）已提交；**pyapps 两系列整目录
+  untracked**（sphere G1–G6 + rotation R1–R6，共 14 个 .py + 2 份 report.md）；
+  `learning-todo` 子仓 `imgs/rot/` 6 张图未提交、`imgs/{deriv,diff,matrix}/` 三目录 untracked。
+  fan-plan.md §3.1/§3.2 已含 G/R 实测状态与两条口径警告（G3 极角/纬度混用、
+  R 系 acos 病态→atan2），本会话此前未同步 §0 —— 现已对齐。
+- **文档更新**：§0 头部（阶段 2 进行期 + V2.4 + pyapps 十二脚本）、工程行（含
+  「R2 已把 lie 刀 4 双覆盖的 Python 前哨做掉」「`_core.py` 是 ode.hpp 的现成对拍源」
+  两个新事实）、扇面行（A 面 3 条 ✔ 超额，B/C/D 0 条 → D2 CLT 下一优先）、
+  李群行（刀 4 前哨状态）。
+- **给用户的提交建议（攒批分组）**：① 父仓 `graphics/demo/pyapps/`（G+R 十四脚本两报告，
+  一刀「pyapps: 球面 G1–G6 + 旋转 R1–R6」）② 子仓 imgs（rot 6 张 + deriv/diff/matrix
+  三目录 + fan-plan.md + matrix.md 的 real() 增量——matrix.md 的改动是 10-14 就有的工作区
+  遗留，与 fan-plan 可分开两刀）③ `dev-progress.md`/`plan.md` 的文档改动随手带。
+- **下一步排序（见 §0 工程行）**：lie 刀 4/5/6 → ode.hpp（Gate A 钥匙，`_core.py` RK4
+  即对拍源）→ LinearOperator → quat C++ 化。
+
+### 2026-10-17（凌晨 · 下一版基线定版）
 
 - **扇面分层调整 + G 系列立项（文档层，无代码改动）** —— 用户两项决定落地：
   ① **viz 层暂缓启用**：纯 Python 数学演示改挂 **`graphics/demo/pyapps/`**（与 `demo/apps/`
@@ -976,3 +1109,44 @@
     改为**构建期用 Node 跑 `katex.renderToString` 预渲染**成静态 HTML（自带
     `<annotation encoding="application/x-tex">`，离线、无闪烁、可搜 TeX 源码）。
   - 仍未装依赖、未改 `notebook/`；`build/` 与 `graph/` 目前是空目录。
+
+- **2026-10-20：新增 `src/linalg/so3.hpp` + ctest `so3`（51 项 FAIL 0；ctest 15/15 → 16/16）**。
+  起因是用户问「叉积到底要不要、`[u]` 要不要实现、写在哪里」。定案三层否决：
+  - **不进 `core/`** —— core 是「标量代数 + 哑容器」，叉积是几何运算；且 §3.7 刚立过
+    「不为一次性用途扩 core 接口」（与 `Rotate` 就地写 trace 同理）。
+  - **不进 `quat/`** —— D16 把四元数封死在本目录且不依赖 linalg；放这儿会让 so(3)
+    反向依赖 quat，层次就乱。
+  - **不塞 `operator.hpp`** —— 那文件自己写了「Dot/Abs2 是暂放，S6 派支线再定去留」，
+    别往待搬迁的抽屉里再塞。
+  ⇒ 新建 `src/linalg/so3.hpp`，只 include `core/matrix.hpp`、不碰任何分解。三个入口：
+  `Cross(a,b)`（手写三分量）/ `Hat(u)`（R³→so(3)）/ `Vee(K)`（so(3)→R³，读 (2,1)(0,2)(1,0)，
+  与 `_rot_core.py:71/:79` 同口径可对拍）。**`quat/` 不 include 它** —— `Rotate` 里那两个
+  叉积继续手写三行，为 3 行算术引入跨层依赖不划算；这是**故意的重复**，已在头文件注释
+  里钉死，防以后有人来"去重"把 D16 拆了。
+  - **口径**：入参出参一律 3×1 列向量（D19）；形状错 `throw invalid_argument`；
+    **`Hat` 不归一化**（`hat(λu)=λ·hat(u)` 是线性的，Rodrigues 需要 θ 单独乘在外面）。
+  - **判据**：全部走「两条独立路径对拍」，[A] Hat 反对称结构 / [B] Hat·Vee 双向互逆 /
+    [C] Cross 基元乘法表+反交换+正交 / [D] Cross vs `Hat(a)·b` / [E] `Hat³ = −|u|²·Hat`
+    （Rodrigues 闭式成立的唯一关键，report.md §1）/ [F] 纯四元数积的向量部分 = 叉积 /
+    [G] 形状契约 throw。分域 double + float 各一遍（float 阈值 1e-5）。
+  - **注入对照（行为型，已回滚 + shasum 验过）**：把 `Hat` 整体翻号（等价左手系）⇒
+    `[A3][B1][B2][D1][D2]` 共 10 项变红。**但 `[A1][E1][E2][E3]` 仍全绿** ——
+    `Hat³ = −|u|²·Hat` 两边都是奇次，整体翻号互相抵消。
+    ⇒ **判据盲区，已写进 `demo/linalg/so3.cpp` 注释：符号由 [A3]（六位置逐位）和
+    [D1]（Cross 对拍）钉，不由 [E] 钉。** 与 `quaternion.hpp:110` 那条
+    「叉积符号写反，往返测试抓不到」是同一类盲区。
+- **2026-10-23：新增 `graphics/demo/pyapps/tensor-convention.md`（228 行，9 节）**。
+  为「将来如果要做物理 demo」提前钉死的张量入场规约 —— **只有约定、没有代码**，
+  **不进 C++ 库**（红线 #4 + `matrix.md` §6），**只活在 `demo/pyapps/`**。
+  格式与数学口径跟随 `pyapps/sphere/_core.py` 头部（ASCII：`R^i_{jkl}`、`A' = R·A·R^T`）。
+  - **升降按场景开关**（不再二选一）：场景 E（g=δ）**不写**升降函数（写了是空转自欺）；
+    场景 G（球面非平凡 `g_ij`）/ 场景 R（Minkowski）**必须写**，R 还要先钉号差
+    `(-,+,+,+)` vs `(+,-,-,-)`。每个脚本头部第一行必须声明场景（三选一）。
+  - **上下标必须进变量名**（`V_up` / `V_down` / `A_up_down`）— numpy 数组只有轴没有上下标，
+    这是全文唯一**靠命名而非靠测试**保证的规则（判据只在出错之后才报警）。
+  - **反对称完整存储、只作判据不作存储约定**（否决"半存 + `get_F`"）：省不下东西，
+    且符号一致地错时测试全绿 —— 与 `so3.hpp` 那次 `Hat` 整体翻号同盲区。
+  - einsum 字符串即文档；**禁写 `contract(T,V,axes_T,axes_V)` 通用封装**
+    （判据：封装是否携带语义）。手写 for 循环**鼓励写一遍**与 einsum 对拍。
+  - 验收不用 `assert`（`python -O` 会关掉、失败无实测值），走 pyapps 现成口径
+    「末尾打印数字 + PASS/FAIL」。`swapaxes` 必指明哪两轴 —— `.T` 对 ≥3 阶是全轴反转。

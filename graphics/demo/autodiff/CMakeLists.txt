@@ -24,3 +24,11 @@ target_include_directories(backward PRIVATE
     ${GRAPHICS_SRC_DIR}
 )
 add_test(NAME backward COMMAND backward)
+
+# 分子布局雅可比 (D19 第二次修订, 2026-10-19): 形状 m×n + 链式法则自然序
+# + 与图反向逐元对拍 + float/double 双域 + 非法输入
+add_executable(jacobian jacobian.cpp)
+target_include_directories(jacobian PRIVATE
+    ${GRAPHICS_SRC_DIR}
+)
+add_test(NAME jacobian COMMAND jacobian)

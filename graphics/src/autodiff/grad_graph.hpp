@@ -51,16 +51,22 @@ inline bool IsBinaryOp(GradOp op)
     }
 }
 
-/* 使用行向量+分母布局, ∂z/∂x = ∂z/∂y x ∂y/∂x = W2 * W1
-// 假设：Y = X * W，其中 X ∈ R^{1×n}, W ∈ R^{n×m}, Y ∈ R^{1×m}
-// 向量 y 对向量 x 的导数是一个矩阵（雅可比矩阵）, 这里直接就是 W
-
-// 分子布局（Numerator Layout）：
-// ∂y/∂x 的形状 = [y的维度, x的维度] = m × n
-
-// 分母布局（Denominator Layout）：
-// ∂y/∂x 的形状 = [x的维度, y的维度] = n × m
-// 这就是转置的来源！
+/* 布局: 列向量 + 分子布局雅可比 (D19 第二次修订, 2026-10-19)
+//
+// 假设：y = W * x，其中 x ∈ R^{n×1}, W ∈ R^{m×n}, y ∈ R^{m×1}
+// 向量 y 对向量 x 的导数是一个 m×n 的矩阵（雅可比）, 这里直接就是 W。
+//
+// 分子布局 (Numerator Layout) —— 本库采用:
+//   J_ij = ∂y_i/∂x_j, 形状 = [y 的维度, x 的维度] = m × n
+//   链式法则自然序: J_{f∘g} = J_f · J_g
+//
+// 分母布局 (Denominator Layout) —— 旧口径, 2026-10-19 翻案前使用:
+//   J_ij = ∂y_j/∂x_i, 形状 = n × m
+//   链式法则镜像: J_{f∘g} = J_g · J_f
+//
+// ⚠ 本文件 Backward 的伴随公式**与布局无关**: y = AB 的 Ā = ā·Bᵀ、B̄ = Aᵀ·ā
+// 在两种约定下形式完全相同 (只换"谁是 A 谁是 B")。翻案改的是**调用方建图的顺序**
+// (以前写 X*W, 现在写 W*x) 与 jacobian.hpp 的 Jacobian() 组装, 不是这里的公式。
 */
 
 template <typename T>
@@ -162,9 +168,8 @@ public:
             case GradOp::CWisePow:
                 throw std::logic_error("CWisePow: 未实现");
             
-            // 矩阵乘法也满足derive的计算规则
-            // 但是需要注意node1和node2的顺序, node1入参数行主导
-            // node2的derive都是0
+            // 矩阵乘法: y = node1 · node2 —— 列向量约定下 node1 = W 在左, node2 = x 在右。
+            // Dual 的乘积法则对矩阵乘同样成立 (value/derive 各自走矩阵乘), 无需特殊处理。
             case GradOp::MatrixMult:
                 matrix = std::move(node1->matrix * node2->matrix);
                 break;
@@ -181,8 +186,10 @@ public:
             // <a_x, dx> = <a_y, dy>
             // z = f(x) = g(y) (y和x是换元)
             case GradOp::Inverse:
-                // TODO: 阶段 1 接 linalg::Inverse
-                throw std::logic_error("Inverse: 待 linalg::Inverse 落地 (阶段 1)");
+                // 未实现。注意: `linalg::Inverse` **早已落地** (V1.2, 2026-10-14),
+                // 原注释"待 linalg::Inverse 落地 (阶段 1)"已过期 —— 现在的阻塞不是依赖,
+                // 而是本节点没接入 (矩阵求逆的伴随公式本身已写好, 见 Backward 同名 case)。
+                throw std::logic_error("Inverse: 本节点未接入 (linalg::Inverse 已可用)");
 
             // 激活函数: 未实现(按 matrix.md 7.5 第 6 条, Sigmoid/Tanh 应拆链,
             // Relu/Softmax 因数值保留 fused 枚举)
@@ -281,13 +288,13 @@ public:
                 node2->adjoint += node1->matrix.cwiseProduct(adjoint);
                 break;
             case GradOp::MatrixMult:
-                // dY = dX * W + x * dW
-                // <a_x, dx> = <a_y, dy> = tr(dy^T * a_y), dW = 0
-                // <J^*  * a_y, dx> = <a_y, dx * J>
-                // 推出a_X = a_Y * W^T
-                // 同理dX = 0
-                // a_W = X^T * a_y
-                // 这里如果是X * X, 恰好也成立
+                // y = A·B  (列向量约定: A 在左, 例如 W·x; 行向量时代是 X·W)
+                // dy = dA·B + A·dB
+                // <ā_y, dy> = tr(ā_yᵀ dA B) + tr(ā_yᵀ A dB)
+                //           = tr(B ā_yᵀ dA) + tr(ā_yᵀ A dB)
+                // ⇒ Ā = ā_y·Bᵀ,   B̄ = Aᵀ·ā_y
+                // **这两行与布局无关**: y = X·W (行) 与 y = W·x (列) 共用同一式, 变的只是
+                // 哪个节点当 A、哪个当 B —— 所以 2026-10-19 的翻案没有动这里。
                 node1->adjoint += adjoint * node2->matrix.Transpose();
                 node2->adjoint += node1->matrix.Transpose() * adjoint;
                 break;
