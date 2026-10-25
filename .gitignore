@@ -42,6 +42,10 @@ htmlcov/
 *.log
 *.tmp
 
+# WIP 备份（不入库，但也不在 /tmp —— 防重启丢失）
+#   2026-10-25：tensor 完整实现（887 行）曾只存 /tmp，重启即丢，已迁入
+.wip-tensor/
+
 # LaTeX 编译产物
 *.aux
 *.out
