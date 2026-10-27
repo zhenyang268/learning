@@ -1,8 +1,60 @@
-# env-git.md — git 写操作被沙箱拒绝：成因与处理
+# env-git.md — git 环境：remote 口径 + 写操作被沙箱拒绝
 
 > 从根 `AGENTS.md` §七 外移（2026-10-17），入口只留摘要与指针。
-> **什么时候读**：`git commit` / `update-index` / `branch -D` / `worktree remove` 报
-> `Operation not permitted`，或报 `File exists` / `Another git process seems to be running` 时。
+> **什么时候读**：① 要推/拉、或配置/检查 remote 时（§一）；
+> ② `git commit` / `update-index` / `branch -D` / `worktree remove` 报
+> `Operation not permitted`，或报 `File exists` / `Another git process seems to be running` 时（§二起）。
+
+---
+
+# 一、remote 统一口径（2026-10-28 定）
+
+**全部 8 个仓一律两端**，命名固定，**不许再各仓各叫法**：
+
+| remote | 指向 | 用途 |
+|---|---|---|
+| **`origin`** | **GitHub**（`git@github.com:zhenyang268/<repo>.git`） | 留档 / 对外 |
+| **`gitee`** | **Gitee**（`git@gitee.com:we_we_we/<repo>.git`） | **日常推送** |
+
+**已统一的仓**（2026-10-28 实测）：
+
+```
+learning                     origin=zhenyang268  gitee=we_we_we
+learning-todo                origin=zhenyang268  gitee=we_we_we
+learning-viz                 origin=zhenyang268  gitee=we_we_we
+learning-web                 origin=zhenyang268  gitee=we_we_we
+learning-408                 origin=zhenyang268  gitee=we_we_we
+11408-notebook               origin=zhenyang268  gitee=we_we_we
+learning-benchmark           origin=zhenyang268  gitee=we_we_we
+raft（~/develop/raft）        origin=zhenyang268  gitee=we_we_we
+```
+
+**本次修的三处历史不一致**（别再改回去）：
+
+1. 父仓 `learning` 曾同时有 `github` 和 `origin` **指向同一地址** ⇒ 已删 `github`；
+   分支只跟踪 `origin/*`，删除不影响。
+2. `raft` 的 `origin` 原本指向 **Gitee**（与其他仓相反）⇒
+   `origin` 改为 GitHub，另加 `gitee` 别名。
+3. `11408-notebook` 只有 `gitee` ⇒ 补 `origin`（GitHub）。
+
+**推送惯例**：日常 `git push gitee <branch>`；GitHub 手动推，不设自动同步
+（详见 `learning-benchmark/docs/bench-workflow.md` §3 的同口径表述）。
+
+**批量检查命令**（在新会话里先跑这个，别凭记忆）：
+
+```bash
+cd ~/develop
+for d in learning learning/learning-todo learning/learning-viz learning/learning-web \
+         learning/11408-notebook learning/learning-408 learning/learning-benchmark raft; do
+  printf "%-22s" "$(basename $d)"
+  echo "origin=$(git -C $d remote get-url origin 2>/dev/null || echo MISSING)  \
+gitee=$(git -C $d remote get-url gitee 2>/dev/null || echo MISSING)"
+done
+```
+
+---
+
+# 二、git 写操作被沙箱拒绝：成因与处理
 
 ## 典型症状
 
