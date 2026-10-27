@@ -1,9 +1,6 @@
 #pragma once
 
-#include <cmath>
 #include <cstring>
-#include <iostream>
-#include <initializer_list>
 #include <numbers>
 #include <cassert>
 #include <limits>

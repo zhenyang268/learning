@@ -1,14 +1,9 @@
 #pragma once
 
-#include <list>
 #include <vector>
-#include <memory>
 #include <utility>
 #include <stdexcept>
-#include "common.hpp"
-#include "core/scalar.hpp"      // ScalarTraits: zero/one/conj/abs2
 #include "autodiff/dual.hpp"
-#include "core/scalar.hpp"
 
 template <typename T>
 class Matrix

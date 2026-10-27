@@ -2,7 +2,8 @@
 //
 // plan.md V1.6 原文:
 //   对易关系数值验证: so(3) 生成元 exp(Ât) 作用向量 = 旋转;  [Jx, Jy] = Jz。
-// 刀序与每刀的独立判据见 learning-todo/lie-plan.md (刀1 本体 / 刀2 对易 / 刀3 三线对拍)。
+// 每刀的独立判据见本文件各段 [A]–[F] 注释 (原 lie-plan.md 已于 2026-10-26 删除；
+// V* 编号对照见 graphics/acceptance.md §4)。
 //
 // ---------------------------------------------------------------------------
 // 这份文件的状态
@@ -91,7 +92,7 @@ static D Det3(const MD& A)
 }
 
 // Rodrigues 闭式 (标尺, 不是被判对象): R = cosθ·I + (1−cosθ)·u uᵀ + sinθ·[u]×
-// (源起 src/view/rotate.hpp 的注释; 那里是 float 旧草稿, 不要 include)
+// (原先是 float 旧草稿 src/view/rotate.hpp 里的注释；该文件与整个 src/view/ 已于 2026-10-26 删除)
 static MD Rodrigues(const D u[3], D th)
 {
     const D c = std::cos(th), s = std::sin(th);

@@ -38,6 +38,10 @@ htmlcov/
 .workbuddy/
 .codebuddy/
 
+# 编辑器/语言服务器缓存（clangd 索引，不入库）
+.cache/
+graphics/.cache/
+
 # 日志与临时文件
 *.log
 *.tmp

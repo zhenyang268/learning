@@ -4,7 +4,8 @@
 > 运行方式：`uv run python graphics/demo/pyapps/sphere/<名字>.py`，每个文件独立可跑
 > 图片输出：`learning-todo/imgs/geo/`
 > 日期：2026-10-17（修订）｜ 依赖：numpy + matplotlib + sympy（未用 scipy —— ODE 全部手写 RK4）
-> 编号依据：`learning-todo/fan-plan.md` §3.1 的 **G 系列**（早期 T 系列编号已废弃）
+> 编号：沿用 **G1–G6**（原 `fan-plan.md` §3.1 定义；该文件 2026-10-26 已删除，编号与本报告内容自足。
+> 早期 T 系列编号已废弃）
 
 ---
 

@@ -2,9 +2,12 @@
 
 > **位置**：`graphics/demo/pyapps/tensor-convention.md`
 > **性质**：**只有约定，没有代码**。为「将来如果要做物理 demo」提前钉死的入场规约。
-> **适用**：`demo/pyapps/` 下所有涉及张量的 Python 演示脚本。
-> **不适用**：**不进 C++ 库** —— `graphics/plan.md` 红线 #4 与 `learning-todo/matrix.md` §6
-> 已定「高维靠展平/切片归约，不造 Tensor 类」。本文只在 demo 目录内存活。
+> **适用**：`demo/pyapps/` 下所有涉及张量的 Python 演示脚本（管 numpy 数组的**轴序与上下标命名**）。
+> **不适用**：**不进 C++ 库**。口径已于 **2026-10-23 翻案** —— `graphics/acceptance.md` §0 红线 #4 与
+> `graphics/acceptance.md` §0 红线 #4 已改口径为「**不造"胖" Tensor 类**」：`Tensor<T>` 哑容器 +
+> `TensorView<T>` 非占有视图**已立项**（`graphics/src/core/tensor.hpp`，契约全、实现体全 `throw`）。
+> 本文仍然不进库，理由换了：**它管的是 numpy 层的轴序/上下标/升降规约**，C++ 侧记号另见
+> `src/core/tensor.hpp` 头注释。**唯一未动的红线：一切指标收缩/einsum 一律自由函数。**
 > **日期**：2026-10-23 ｜ 上游素材：外部 agent 讨论稿（2026-10-23 转入，经本项目口径校订）
 
 ---
@@ -104,7 +107,7 @@ def contract(T, V, axes_T, axes_V): ...     # 别写
    `Hat³ = −|u|²·Hat` **仍然全绿**，因为两边都是奇次、翻号互相抵消。
    `quaternion.hpp:110` 那条「叉积符号写反，往返测试抓不到」也是同一类盲区。
 
-同源规矩：`matrix.md` §3.7「不给稠密 `Matrix` 存运行期结构标签」——
+同源规矩（原 `matrix.md` §3.7，现见 `acceptance.md` §0 红线 #2）：「不给稠密 `Matrix` 存运行期结构标签」——
 数据一旦带隐含约定（我是对称/反对称/半存），而读取路径不统一，就会静默出错。
 
 **反对称的正确位置是判据**（见 §5），不是存储策略。
@@ -210,10 +213,11 @@ assert np.allclose(G,  G.swapaxes(0, 1))          # 两阶对称
 
 ## 8. 明确不做（防范围蠕变）
 
-- **不进 C++ 库**。红线 #4 + `matrix.md` §6：高维靠展平/切片归约为二维线性代数，
-  不造 `Tensor<T,rank>`。本文所有规则**只对 pyapps 的 Python 脚本有效**。
-- **不造 Tensor 类**，也不造 Vector3。numpy 裸数组 + `np.einsum` 就是全部载体
-  （`matrix.md` §6「存储层免费、运算层值钱」）。
+- **本文不进 C++ 库，也不产出 Python 侧的容器类**。numpy 裸数组 + `np.einsum` 就是全部载体。
+  （口径 2026-10-23 订正：`acceptance.md` §0 红线 #4 已**放行** `Tensor<T>` 哑容器 + `TensorView<T>`
+  非占有视图，红线 #4 同步。**但本文的载体仍是 numpy** —— 它服务的是 pyapps 层的轴序/上下标规约，
+  与 C++ 侧容器是两件事。**未动的红线：收缩/einsum 一律自由函数，不进容器类。**）
+- **不造 Vector3**（固定 3 维）。动态长度的 `Vector<T>` 见 `tensor.hpp` 头注释（决策 #21），与 pyapps 无关。
 - **不做 `ascontiguousarray` 优化**。当前规模（2×2~4×4）收益不成立，
   提前优化会把代码搞脏。等真有 10⁶ 点的场再说 —— 那时瓶颈也不是内存连续性，
   而是「能不能把整个问题归约成矩阵乘法」（见 `MEMORY.md` §四最小二乘那条）。

@@ -7,10 +7,7 @@
  */
 
 #include <utility>
-#include <cstdint>
 #include <concepts>
-#include <type_traits>
-#include <cmath>
 #include <limits>
 #include "core/complex.hpp"
 #include "autodiff/dual.hpp"
