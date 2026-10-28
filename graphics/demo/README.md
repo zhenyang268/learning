@@ -22,6 +22,18 @@
 **读这个目录的正确顺序**：先看 §1 的三层，再看 §2 的表找到你关心的用例，
 最后按 §4 的规矩加东西。
 
+> **⚠️ 本文的「三层」与 `../test-map.md` 的「三层」不是一回事**（名字撞了，含义不同）：
+>
+> | | 本文的三层 | `test-map.md` 的三层 |
+> |---|---|---|
+> | 切分依据 | **职责**（谁判对错、判到什么程度） | **追溯链**（接口 → 用例 → 判据实现） |
+> | 第一层 | `smoke.cpp`（只管编译） | `EntryTable` 的接口清单（40 条） |
+> | 第二层 | 17 个 ctest（判算法） | 16 个专项用例 |
+> | 第三层 | `apps/` + `pyapps/`（看现象） | 用例内部的 `[A]/[B]/[C]` 段 |
+> | 回答的问题 | **「这个目录怎么组织、加东西守什么规矩」** | **「某个接口被什么测了、还差什么」** |
+>
+> 一句话分工：**本文管「怎么放、怎么写」，`test-map.md` 管「谁测了谁」。**
+
 ---
 
 ## 1. 第 1 层：`smoke.cpp` —— 保护「编译」
@@ -134,8 +146,8 @@ jacobian    18
 ### 3.1 它们和第 2 层的分界（一条判定规则）
 
 > **要不要出现在 ctest 的绿灯里？**
-> 要 → `demo/<模块>/`（四行：`add_executable` + `target_include_directories` + `add_test`）
-> 不要 → `demo/apps/`（三行：无 `add_test`，且**必须** `EXCLUDE_FROM_ALL`）
+> 要 → `demo/<模块>/`（**三个 CMake 命令**：`add_executable` + `target_include_directories` + `add_test`）
+> 不要 → `demo/apps/`（**两个命令**：无 `add_test`，且**必须** `EXCLUDE_FROM_ALL`）
 
 **`EXCLUDE_FROM_ALL` 是硬要求，不是风格**：`run_tests.sh` 构建走 `ALL`。
 不加的话，附加区里的**半成品编译失败会把整个验收卡在构建阶段**，ctest 一条都跑不到。
@@ -181,27 +193,43 @@ jacobian    18
 
 **现状**：17 个用例全部一致。**新增时保持**。
 
-### 4.2 输出：两个标记是硬契约
+### 4.2 输出：两个标记是硬契约，末行汇总不是
 
 ```cpp
-ck.check(pass, "名字");                     // 每项一行，含 [OK] 或 [FAIL]
+ck.check(pass, "名字");                      // 每项一行，含 [OK] 或 [FAIL]
 ...
-return CheckReport(ck.ok, ck.fail, "标题");  // 末行汇总，返回 0/1
+return CheckReport(ck.ok, ck.fail, "标题");   // 末行汇总，返回 0/1
 ```
 
 | 要求 | 硬/软 | 依据 |
 |---|---|---|
-| 每项判据输出一行，含 **`[OK]`** 或 **`[FAIL]`** | **硬** | `run_tests.sh -d` 用 `grep -c '\[OK\]'` 计数，缺了就统计不到 |
+| 每项判据输出一行，含 **`[OK]`** 或 **`[FAIL]`** | **硬** | `run_tests.sh -d` 用 `grep -c '\[OK\]'` / `'\[FAIL\]'` 计数 |
 | 退出码 `0` 全绿 / `1` 有 FAIL | **硬** | ctest 判定 |
-| 末行汇总「检查 N 项 (FAIL M)」 | 软（`CheckReport` 已给） | 便于人读 |
+| 末行汇总「检查 N 项 (FAIL M)」 | **软**（`CheckReport` 已给） | **`-d` 不依赖它** —— 那行数字是脚本自己算的，见下 |
 | 输出带 `got= / want=` 数值 | 软，**但强烈推荐** | **失败时信息量最大** —— 只给 `[FAIL] name` 你得回去加打印才能定位 |
 
-**已知不一致（两处，待统一）**：`scalar_traits` 与 `compute_graph` 手写 `printf`，
-格式是 `got=/want=`，**缺末行汇总**（所以 `grep '检查'` 数不到它们，`grep '[OK]'` 可以）。
+**实测的两种末行（15 : 2）**：
 
-**推荐改法**（改的是 `demo/common.hpp`，不是这两处）：
-给 `Checker` 加一个带数值的变体，如 `ck.near(got, want, tol, name)`，
-内部打印 `got=/want=` 并按 `tol` 判定。这样两种格式合一，且以后新用例不必手写 `printf`。
+```
+15 个用例（用 CheckReport）末行两行：      2 个手写 printf 的用例末行一行：
+  svd: 检查 266 项 (FAIL 0)                 ALL TESTS PASSED (0 failures)
+  ALL TESTS PASSED
+```
+
+**关键是别误解因果**：`run_tests.sh -d` 输出的「检查 N 项」是**脚本算的**，不是解析用例的末行：
+
+```bash
+n_ok="$(printf '%s\n' "$out" | grep -c '\[OK\]')"     # ← 脚本自己数
+n_bad="$(printf '%s\n' "$out" | grep -c '\[FAIL\]')"
+```
+
+所以那两个手写 `printf` 的用例（`scalar_traits` / `compute_graph`）**在 `-d` 里照样显示 44 项 / 36 项**，
+只是**单跑时**少一行汇总、可读性差一点。**这就是它只是"软要求"的原因。**
+
+**推荐改法**（改 `demo/common.hpp`，不是改那两处）：
+给 `Checker` 加一个带数值的变体，如 `ck.near(got, want, tol, name)` ——
+内部打印 `got=/want=` 并按 `tol` 判定。这样两种格式合一，新用例不必手写 `printf`，
+且失败时自动带数值。
 
 ### 4.3 文件结构：头部注释是**判据规格书**
 
@@ -215,6 +243,24 @@ return CheckReport(ck.ok, ck.fail, "标题");  // 末行汇总，返回 0/1
 
 **这不是格式要求，是流程要求**（`acceptance.md` §1「判据先行」）：
 **先写「多少算对」，再对着判据写实现。** 反过来写等于「先写代码，再挑一个它的输出当标准」。
+
+**段编号 `[A]` `[B]` `[C]` 怎么用**：
+
+多数用例内部按主题分段（`[A]` 重构 / `[B]` 正交性 / `[C]` 独立不变量…），
+`ck.check()` 打印的名字里通常带段号（如 `"[B3] Q^H Q − I"`）。**它的作用是定位**：
+
+```
+看到 [FAIL] [D2] ...  →  回头部注释判据清单，找第 ④ 条对应的段
+                     →  直接跳读该段的代码，不用整篇找
+```
+
+**约定（不是强制，但 17 个用例基本都这么做）**：
+- `[A]` 一般是**主体判据**（重构 / 定义式）
+- 靠后的段一般是**边界 + 异常**
+- **`[P]` 段是占位** —— 只出现在 `tensor` 与 `quaternion`，语义是「断言它仍然 `throw`」
+  （**不是"测过了"**，见 §2.4 与 §7 的占位说明）
+
+有段号的用例读起来像**带索引的书**，没有段号的只能从头读 —— 这就是它值得保持的原因。
 
 ### 4.4 判据必须独立于实现路径
 
@@ -242,17 +288,137 @@ return CheckReport(ck.ok, ck.fail, "标题");  // 末行汇总，返回 0/1
 「`double` 域 0 错」**掩盖**真 bug —— 这个仓已发生 **5 次，全在 `complex`**。
 反向亦然：「编不过」可能只是域不匹配，不是真错。
 
+### 4.7 `common.hpp` 的三个量度函数，别用错
+
+所有人共用的只有四个东西，**选错了会引入额外误差或量纲错**：
+
+| 函数 | 是什么 | 用在哪 | 不能用在哪 |
+|---|---|---|---|
+| **`MaxAbs2(A)`** | `max \|a_ij\|²`（**平方量**） | **比较**（判据里的 `<=`） | 打印（读者看不出量级） |
+| **`NormInf(A)`** | `sqrt(MaxAbs2)` = 真正的 ∞ 范数 | **打印 / 打分 / 报数** | **算法分支**（`D7`：判据只在实数域，且开方多一次舍入） |
+| **`IsApprox(A,B,tol)`** | `MaxAbs2(A−B) <= tol*tol` | 矩阵相等判定 | 尺度悬殊的数据（见下） |
+| **`RandMatrix<T>(r,c,seed,lo,hi)`** | 定 seed 随机阵，支持 `float`/`double`/`Complex`/`Dual`(含 `Dual<Complex>`) | 所有需要随机输入处 | 判病态（随机阵**不含**近奇异/尺度悬殊，要单独构造） |
+
+**为什么比较用平方量**（`MaxAbs2`）而不是先开方：
+阈值可以**预先平方**（`tol*tol`），**省一次 `sqrt`、也少一次舍入**。
+两者数学等价，但 `MaxAbs2(A) <= tol*tol` 与 `sqrt(MaxAbs2(A)) <= tol` 在边界上可能差 1 ulp。
+
+**量纲坑（`pitfalls.md` §八 ③ 同源）**：写成 `MaxAbs2(A) <= tol` 是把
+「模长阈值」当「模长平方阈值」用 ⇒ **实际容忍度变成 `√tol`**，差一个数量级。
+**见到 `abs2` 与 `tol` 同时出现，第一件事是看右边平方了没有。**
+
+**`RandMatrix` 的三个必知**：
+
+1. **seed 必须显式给**（默认 `1u`）。判据要可复现，同一 seed 两次跑必须逐位相同。
+2. **它生成的是良态随机阵**，`lo/hi` 只是范围。近奇异、尺度悬殊、零阵、`n=0/1`
+   **必须自己构造** —— 这是 §4.5「病态输入必列」的由来。
+3. `Dual<Complex>` 的单列特化是**必需的**（`pitfalls.md` §五）：复用 `RandFill<Dual<U>>`
+   会因 `Complex` 没有单参构造而编不过。
+
 ---
 
-## 5. 新增东西的最短路径
+## 5. 怎么跑与怎么排障
+
+> 这一节回答「绿灯是什么意思、红了怎么定位」。**不要跳过** ——
+> 本仓历史上最浪费时间的事故是「用错的方式验证」，比如跑的还是上一次的二进制。
+
+### 5.1 三个入口，各管一段
+
+| 入口 | 跑什么 | 什么时候用 |
+|---|---|---|
+| `./graphics/run_tests.sh` | **配置 + 构建 + 全部 17 个 ctest** | 每次改完 `src/` 或 `demo/`，**收工前必跑** |
+| `./graphics/run_apps.sh <name>` | 构建 + 跑一个 app（`demo/apps/`） | 只想看现象 |
+| `./graphics/build/demo/<模块>/<名>` | 直接跑单个用例，**不重新构建** | 已知只改了一个用例，想反复看明细 |
+
+**三者关系**：`run_tests.sh` 是**唯一权威**（它管构建）。
+后两个都**假定已经构建过** —— 改了代码不重跑 `run_tests.sh` 直接单跑，
+**跑的是旧二进制**（`pitfalls.md` §九 ① 记的就是这个坑的变体）。
+
+### 5.2 选项表（都实测过）
+
+**`run_tests.sh`**
+
+| 选项 | 作用 |
+|---|---|
+| （无参） | 增量构建 + 跑全部 |
+| **`-d`** | 跑完再逐用例打印「检查 N 项 (FAIL M)」+ 末行。**定位时最常用** |
+| `-c` | 删掉构建目录从零构建（怀疑缓存时用） |
+| `-w` | 开 `-Wall -Wextra`。**查"编得过但不对劲"时用** |
+| `-j 4` | 并行度（默认本机核数） |
+| `-b /tmp/gb` | 换构建目录 |
+| `-l` | 只列出已注册用例，不构建不跑（**查"用例注册上了没"**） |
+| `--build-only` / `--test-only` | 只构建 / 只跑测试 |
+
+**`run_apps.sh`**：`<name>` 构建并跑；`<name> -c` 从零；`<name> -- 3 7` 把参数透传给 app。
+
+### 5.3 退出码有两套，别混
+
+| 谁 | 退出码 |
+|---|---|
+| **单个用例**（`CheckReport` 返回） | `0` 全过 / `1` 有 FAIL。ctest 靠这个判红绿 |
+| **`run_tests.sh`** | `0` 全绿 / `1` **配置或构建失败** / `2` **有用例失败** / `64` 参数错误 |
+
+**区别很实用**：
+- 退出码 `1` ⇒ **一条用例都没跑**，问题在 CMake 或编译器
+- 退出码 `2` ⇒ 构建成功但有用例红，问题在代码或判据
+- 单跑时出现 `134`（SIGABRT）⇒ **判据函数没包 `try`**，异常 terminate 了进程
+
+### 5.4 红了怎么定位（按这个顺序）
+
+```
+① 看退出码
+   ├─ 1 → 配置/构建失败：读编译错误。常见原因是漏 target_include_directories
+   │      或 apps/ 里漏了 EXCLUDE_FROM_ALL（半成品参与 ALL 构建）
+   ├─ 2 → 有用例失败：进 ②
+   └─ 134（单跑）→ 判据函数没包 try
+
+② 跑 ./run_tests.sh -d
+   ├─ 只有 1 个用例红 → 进 ③
+   ├─ 全部红        → 改过 core/（scalar.hpp / matrix.hpp）？
+   │                  共享依赖坏了，全部阈值会同时失效，先修那一处
+   └─ 时好时坏      → 未定义行为：越界读 / 未初始化。
+                      ./run_tests.sh -w 看告警；再单跑几次看结果是否变
+
+③ 单跑那个用例，找 [FAIL] 那一行的名字
+   → 回该用例头部注释的「判据 ①②③」清单，看它属于哪一条
+   → 按那一类的性质判断（见下）
+
+④ 判断是实现错还是判据病态
+   ├─ ① 结构性（要求精确 0）红 → 几乎一定是实现错
+   ├─ ③ 独立不变量红 → 先查量级（numeric-contract.md §4.2 的阈值分级表）
+   └─ 拿不准 → 查 pitfalls.md §一「判据病态 ≠ 实现错」
+```
+
+**一条经验**：`[FAIL]` 的名字是**手写的字符串**，多数用例已经在名字里带了数值
+（如 `"V1.2 求逆残差 1.18e-13 < 1e-8"`）—— **先读名字，它经常直接告诉你答案**。
+
+### 5.5 构建成功但 `-l` 看不到新用例
+
+三个可能，按顺序查：
+
+1. **`add_test` 漏了** —— 只有 `add_executable` 时程序会构建出来，但 ctest 不认识它
+2. **`demo/CMakeLists.txt` 没 `add_subdirectory(<新目录>)`**
+3. **改了 `CMakeLists.txt` 但没重新配置** —— `run_tests.sh` 会配置，但如果直接
+   `cmake --build` 就不会。用 `run_tests.sh -c` 彻底重来
+
+---
+
+## 6. 新增东西的最短路径
 
 ### 5.1 新增一个 ctest 用例
 
+```cmake
+# demo/<模块>/CMakeLists.txt —— 三个命令，缺 add_test 就进不了 ctest
+add_executable(xxx xxx.cpp)
+target_include_directories(xxx PRIVATE ${GRAPHICS_SRC_DIR})
+add_test(NAME xxx COMMAND xxx)
+```
+
 ```bash
-1. 在 demo/<模块>/ 建 xxx.cpp，头部按 §4.3 写判据规格书
-2. 照抄同目录 CMakeLists.txt 的五行（add_executable / include / add_test）
-3. ./run_tests.sh              # 确认新用例注册上了（应变成 18/18）
-4. 在 ../test-map.md §2 的表里补一行（填【实测】判据数，见 §5.3）
+1. 建 demo/<模块>/xxx.cpp，头部按 §4.3 写判据规格书
+2. 上面三个命令（照抄同目录已有条目；文件名 = target 名 = ctest 名）
+3. ./run_tests.sh              # 确认注册上了（总数会 +1）
+4. 在 ../test-map.md §2 的表里补一行（填【实测】判据数，见 §6.3）
 ```
 
 ### 5.2 新增一个 app（只看现象）
@@ -282,7 +448,7 @@ done
 
 ---
 
-## 6. 常见错误（都是本仓真实发生过的）
+## 7. 常见错误（都是本仓真实发生过的）
 
 | 错误 | 后果 | 正确做法 |
 |---|---|---|
@@ -292,27 +458,37 @@ done
 | **占位判据写成「跳过」** | 实现了没人知道，没实现也没人知道 | 写成「断言它仍然 `throw`」，实现一条就变红 |
 | **只在 `[B]` 里调新入口** | 该入口的实例化依赖「有没有被用到」 | `[A]` 的 `EntryTable` 三处同步登记 |
 | **判据用 `‖·‖∞` 判病态数据** | 1e9 与 1e-9 混在一起时，后者错 100% 也看不出来 | 逐元素判（`numeric-contract.md` §4.3） |
+| **手写 `printf` 时漏了 `[OK]`/`[FAIL]` 标记** | `run_tests.sh -d` 数到 **0 项**，看着像"没跑" | 标记是硬契约（§4.2）；能不用手写就别手写 |
+| **新增用例忘了 `add_subdirectory`** | 目录里的东西压根不参与构建，`-l` 看不到 | 三处都要：`.cpp` + 目录 CMakeLists + 父 CMakeLists |
+| **`abs2(...) <= tol`（右边没平方）** | 实际容忍度变成 `√tol`，差一个数量级 | `abs2(...) <= tol*tol`（`pitfalls.md` §八 ③） |
+| **判据函数/批量循环没包 `try`** | 一次 `throw` ⇒ `terminate` ⇒ **后面所有判据都不跑**，退出码 134 | 每个判据包 `try`，`catch` 里记 FAIL 继续 |
 
 ---
 
-## 7. 目录一览（当前 42 个文件 + 本文）
+## 8. 目录一览（当前 43 个文件，含本文）
 
 ```
-demo/
+demo/                                       (43)
+├── README.md               ← 本文（导读与规范）
 ├── common.hpp              ← 测试侧公共工具（量度 / 随机矩阵 / 记分板）。**不含被测实现**
 ├── CMakeLists.txt          ← 只有 5 行 add_subdirectory
 ├── core/        (3)        CMakeLists + scalar_traits  tensor
 ├── autodiff/    (5)        CMakeLists + compute_graph  apply  backward  jacobian
-├── linalg/      (11)       CMakeLists + smoke  solve  inverse  cholesky  eigen  svd
-│                           qr  dual_complex  expm  so3
+├── linalg/      (11)       CMakeLists + **10 个 .cpp**：
+│                             smoke  solve  inverse  cholesky  eigen  svd
+│                             qr  dual_complex  expm  so3
 ├── quat/        (2)        CMakeLists + quaternion
 ├── apps/        (2)        CMakeLists + string_modes        ← 附加区，不注册 ctest
 └── pyapps/      (17)       sphere/(8)  rotation/(8)  + tensor-convention.md
                                                              ← 纯 Python，不进 CMake
 ```
 
-**注意 `linalg/` 是 11 个文件 = 1 个 CMakeLists + 10 个用例**。
-上面 §2 说「linalg（9 个）」指的是**非 smoke 的专项用例**，两者差一个 `smoke`。
+**两处容易数错的**：
+
+- 根目录 **3 个文件** = 本文 + `common.hpp` + `CMakeLists.txt`
+- `linalg/` **11 个文件** = 1 个 CMakeLists + **10 个 `.cpp`**。
+  而 §2.3 标题写「9 个」指的是**非 smoke 的专项用例** —— 10 个 `.cpp` 里 `smoke` 是闸门，
+  它与其余 9 个的性质不同（§1 讲的就是它）。**别把这两个数字当成矛盾。**
 
 **目录本身就是文档**：`core/ autodiff/ linalg/ quat/` 一一对应 `src/` 下的同名目录。
 **找不到某个算法的用例，就说明它没有验收** —— 这是最快发现覆盖漏洞的方法。
