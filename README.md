@@ -148,7 +148,7 @@ learning/                        viz/                        web/
 | `graphics/acceptance.md` | **验收判据规范**：判据五条、闸门与注入、历史 `V*` 编号对照 |
 | `docs/pitfalls.md` | **口径与踩坑**：判据病态、共轴掩盖 bug、holonomy 口径、泛型域、实例化才叫落地 |
 | `docs/eng-competency.md` | **工程能力 60/80 基线**：四赛道检查点、赛道重叠矩阵、本仓现状对照（**不含顺序与期限**） |
-| `docs/baseline-60.md` | **四线 × 两把 60 分尺子**（学习 vs 工程）：数学 / 数学物理 / CG / CS；补工程侧未覆盖的两条线 |
+| `docs/baseline-levels.md` | **四线 × 三档（60/80/90）× 两把尺子**（学习 vs 工程）：数学 / 数学物理 / CG / CS；含**反例判据**与**验证机制** |
 | `docs/math-log.md` | 数学线**会话日志**（append-only） |
 | `docs/interview-depth.md` | 面试深度清单 + 本仓实况校正 + 明确不做的边界 |
 | `docs/env-git.md` / `docs/doc-checkup.md` | git 沙箱坑 / 文档体检清单（低频） |
