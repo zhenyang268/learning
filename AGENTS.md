@@ -20,6 +20,7 @@
 | `docs/pitfalls.md` | **口径与踩坑**（判据病态、共轴掩盖、holonomy 口径、泛型域、实例化才叫落地） | 判据出怪数、或怀疑"实现错"时 |
 | `docs/eng-competency.md` | **工程能力 60/80 基线**（四赛道检查点、赛道重叠矩阵、本仓现状对照）。**只管"能做出来"** | 评估"这个件做到什么程度算过关"，或对岗位要求时 |
 | `docs/baseline-levels.md` | **四线 × 三档（60/80/90）× 两把尺子**（学习 vs 工程）。覆盖 **数学 / 数学物理 / CG / CS**；含**反例判据（§0.6 一票否决）**与**验证机制（§0.7）** | 自我评估"我到哪一档了"、区分"读懂"与"做出来"、找**降档信号**时 |
+| `docs/interview-map.md` | **三方向 × 学科线的档位要求**（C++ 后端 / 算法测开 / CG）。回答"为了这个方向的面试，每条线要到哪一档"；含 Raft 等具体资产的现状与缺口 | 准备某个方向的面试、判断"这块要不要补"时 |
 | `graphics/demo/pyapps/tensor-convention.md` | pyapps 层张量记号约定（轴序 = 指标序、上下标进变量名、einsum 即文档） | 写 pyapps 张量脚本时 |
 | `docs/env-git.md` | git 写操作被沙箱拒绝的成因与处理（锁文件清单、worktree 补法） | git 报 `Operation not permitted` / `File exists` 时 |
 | `docs/doc-checkup.md` | 文档体检清单（低频，每月一次） | 大改文档后 |
