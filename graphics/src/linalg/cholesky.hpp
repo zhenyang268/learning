@@ -2,7 +2,6 @@
 
 #include <stdexcept>
 #include <string>
-#include "core/common.hpp"
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
 

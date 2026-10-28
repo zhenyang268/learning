@@ -133,14 +133,23 @@ public:
     //   用 DefaultTol 判会把合法输入拒掉。
     //   单位四元数下有捷径 q^{-1} = q* —— 但别写死成"只支持单位四元数",
     //   Slerp 的中间量与 FromMatrix 的原值都可能暂时不是单位长度。
+    // 四元数只有float double所以不走scalartraits的one zero没必要
     Quaternion Inverse() const
     {
-        throw std::logic_error("Quaternion::Inverse: 待实现 (B1 第 ② 步)");
+        if (w == T(0) && x == T(0) && y == T(0) && z == T(0)) {
+            throw std::runtime_error(
+                "Quaternion::Inverse: 零四元数没有逆 (判据: 四个分量精确全为 0)");
+        }
+        return Conjugate() * (T(1) / SquaredNorm());
     }
 
     Quaternion Normalize() const
     {
-        throw std::logic_error("Quaternion::Normalize: 待实现 (B1 第 ② 步)");
+        if (w == T(0) && x == T(0) && y == T(0) && z == T(0)) {
+            throw std::runtime_error(
+                "Quaternion::Inverse: 零四元数没有逆 (判据: 四个分量精确全为 0)");
+        }
+        return *this * (T(1) / Norm());
     }
 
     // ---- ③ 与旋转矩阵互转 + 旋转向量 (全部待实现) --------------------------
@@ -150,16 +159,56 @@ public:
     // 轴 (ux,uy,uz) 先归一化; 传零轴是非法输入 (θ=0 时轴无定义, 调用方自己判)。
     static Quaternion FromAxisAngle(T ux, T uy, T uz, T theta)
     {
-        (void)ux; (void)uy; (void)uz; (void)theta;
-        throw std::logic_error("Quaternion::FromAxisAngle: 待实现 (B1 第 ③ 步)");
+        T c = std::cos(theta/2);
+        T s = std::sin(theta/2);
+
+        T norm = std::sqrt(ux * ux + uy * uy + uz * uz);
+        if (norm <= DefaultTol<T>()) {
+            throw std::invalid_argument(
+                "Quaternion::FromAxisAngle: 非法旋转轴");
+        }
+        return Quaternion(c, s * ux / norm, s * uy / norm, s * uz / norm);
     }
+
+
+    /*
+        v' = cosθ * v + sinθ * u x v + (1 - cosθ) * u x u x v = R * v
+        u x v = [u]v = (uu^T - I) * v
+        1. w^2 - |v|^2 = cosθ
+        2. 2vv^T = (1 - cosθ)uu^T, v = sin(θ/2)*u
+        3. 2w[v] = sinθ * [u]
+    */
 
     // 单位四元数 -> 3x3 旋转矩阵。
     // 注意: 内部**自己归一化** (与 Python 版 quat_to_matrix 一致), 别假设调用方已归好。
     Matrix<T> ToMatrix() const
     {
-        throw std::logic_error("Quaternion::ToMatrix: 待实现 (B1 第 ③ 步)");
+        const Quaternion<T> q = Normalize();
+        const T w = q.w, x = q.x, y = q.y, z = q.z;
+
+        Matrix<T> R(3, 3);
+        R(0,0) = T(1) - T(2)*(y*y + z*z);
+        R(0,1) = T(2)*(x*y - w*z);
+        R(0,2) = T(2)*(x*z + w*y);
+        R(1,0) = T(2)*(x*y + w*z);
+        R(1,1) = T(1) - T(2)*(x*x + z*z);
+        R(1,2) = T(2)*(y*z - w*x);
+        R(2,0) = T(2)*(x*z - w*y);
+        R(2,1) = T(2)*(y*z + w*x);
+        R(2,2) = T(1) - T(2)*(x*x + y*y);
+        return R;
     }
+
+    /*
+        1. tr(R) = 1 - 2cosθ
+        2.  R(2,1) - R(1,2) = 4w·x
+            R(0,2) - R(2,0) = 4w·y
+            R(1,0) - R(0,1) = 4w·z
+
+        R = [[1-2(y²+z²), 2(xy−wz), 2(xz+wy)], 
+            [2(xy+wz), 1-2(x²+z²), 2(yz−wx)], 
+            [2(xz−wy), 2(yz+wx), 1-2(x²+y²)]]
+    */
 
     // 3x3 旋转矩阵 -> 单位四元数。**必须四分支 Shepperd**:
     //   按 tr(R) 与三个对角元里最大的那个选分支, 否则在 θ→π (tr→-1) 处
@@ -167,8 +216,38 @@ public:
     // 返回的代表元符号是任意的 (M(q) = M(-q)) —— 想和别的 q 比, 请比 |q0·q1|。
     static Quaternion FromMatrix(const Matrix<T>& R)
     {
-        (void)R;
-        throw std::logic_error("Quaternion::FromMatrix: 待实现 (B1 第 ③ 步)");
+        if (R.Rows() != 3 || R.Cols() != 3)
+            throw std::invalid_argument("Quaternion::FromMatrix: R 必须是 3x3");
+
+        const T t = R(0,0) + R(1,1) + R(2,2);   // Matrix 无 Trace(), 直接加
+        T w, x, y, z;
+
+        if (t > T(0)) {                                        // 分支 1: w 当主角
+            const T s = std::sqrt(t + T(1)) * T(2);
+            w = T(0.25) * s;
+            x = (R(2,1) - R(1,2)) / s;
+            y = (R(0,2) - R(2,0)) / s;
+            z = (R(1,0) - R(0,1)) / s;
+        } else if (R(0,0) > R(1,1) && R(0,0) > R(2,2)) {        // 分支 2: x 当主角
+            const T s = std::sqrt(T(1) + R(0,0) - R(1,1) - R(2,2)) * T(2);
+            w = (R(2,1) - R(1,2)) / s;
+            x = T(0.25) * s;
+            y = (R(0,1) + R(1,0)) / s;
+            z = (R(0,2) + R(2,0)) / s;
+        } else if (R(1,1) > R(2,2)) {                          // 分支 3: y 当主角
+            const T s = std::sqrt(T(1) + R(1,1) - R(0,0) - R(2,2)) * T(2);
+            w = (R(0,2) - R(2,0)) / s;
+            x = (R(0,1) + R(1,0)) / s;
+            y = T(0.25) * s;
+            z = (R(1,2) + R(2,1)) / s;
+        } else {                                               // 分支 4: z 当主角
+            const T s = std::sqrt(T(1) + R(2,2) - R(0,0) - R(1,1)) * T(2);
+            w = (R(1,0) - R(0,1)) / s;
+            x = (R(0,2) + R(2,0)) / s;
+            y = (R(1,2) + R(2,1)) / s;
+            z = T(0.25) * s;
+        }
+        return Quaternion(w, x, y, z).Normalize();
     }
 
     // 直接算 v' = q v q* (标量+向量形式, 不构造 4x4):
@@ -176,8 +255,14 @@ public:
     // 入参约定: 3x1 列向量; 其他形状 throw (契约写清楚, 别静默接受)。
     Matrix<T> Rotate(const Matrix<T>& v) const
     {
-        (void)v;
-        throw std::logic_error("Quaternion::Rotate: 待实现 (B1 第 ③ 步)");
+        if (v.Rows() != 3 || v.Cols() != 1)
+            throw std::invalid_argument("Quaternion::FromMatrix: R 必须是 3x1");
+
+        Quaternion q(T(0), v(0,0), v(1,0), v(2,0));
+        Quaternion norm = Normalize();
+        Quaternion v_prime = norm * q * norm.Inverse();
+
+        return v_prime.ToMatrix();
     }
 
     // ---- ④ 插值 (待实现) -------------------------------------------------
@@ -187,7 +272,7 @@ public:
     // Python 侧已经因此踩过两次假误差 (report.md §7 第 1 条)。
     T AngleOf() const
     {
-        throw std::logic_error("Quaternion::AngleOf: 待实现 (B1 第 ④ 步)");
+        return 2 * std::atan2(std::sqrt(x * x + y * y + z * z), w);
     }
 };
 

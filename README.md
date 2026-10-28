@@ -164,6 +164,7 @@ learning/                        viz/                        web/
 | 文件 | 内容 |
 |---|---|
 | `docs/route-math.md` | 数学**地图**：十段、双线依赖、每段"看懂线"、不做的边界、Lee 的正确读法 |
+| `docs/math-to-code.md` | **数学对象 → 代码形态映射**：先选离散化、用法四层、截断误差分界、强制带判据的映射表 |
 | `learning.md` | 数学**手推题库**（只是题，不含路线） |
 | `docs/math-log.md` | 数学线**会话日志**（append-only） |
 

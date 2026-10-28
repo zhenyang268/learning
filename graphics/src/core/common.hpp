@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstring>
-#include <numbers>
 #include <cassert>
+
+/*
+#include <numbers>
 #include <limits>
 
 constexpr float NaN = std::numeric_limits<float>::quiet_NaN();
@@ -21,7 +23,7 @@ constexpr double EPSILON_D = std::numeric_limits<double>::epsilon();
 
 constexpr float Tol = EPSILON;
 constexpr double Tol_D = EPSILON_D;
-
+*/
 
 enum class MatrixKind 
 { 

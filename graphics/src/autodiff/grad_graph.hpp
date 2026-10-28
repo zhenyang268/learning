@@ -8,10 +8,8 @@
 #include <cassert>
 #include <string>
 #include <stdexcept>
-#include "autodiff/dual.hpp"
 #include "core/common.hpp"
 #include "core/matrix.hpp"
-#include "core/scalar.hpp"
 #include "autodiff/jacobian.hpp"
 
 // 使用无作用域枚举会与 GradOp 的枚举值(Input/Data/Function)冲突, 改为作用域枚举
