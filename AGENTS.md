@@ -19,10 +19,11 @@
 | `graphics/acceptance.md` | **验收判据规范**（怎么算通过；含已退役 `V*` 编号对照） | 写/改任何 ctest 用例前 |
 | `graphics/numeric-contract.md` | **数值契约**（`D7`/`D12`/`D16`/`D19` 完整内容：除零两层、容差体系、错误类型三分、布局形状）。接管已删除 `matrix.md` 的契约部分 | 写任何 `src/` 数值代码前；看到源码里裸 `D12`/`§10.8` 引用时 |
 | `graphics/test-map.md` | **接口 ↔ 测试可追溯图**（31 个自由函数 + 13 个 `Matrix` 成员 → 权威用例 → 判据编号；含**闸门漏项两条**） | 想知道"某接口被什么测了"、新增入口/用例、或怀疑覆盖有洞时 |
+| `graphics/demo/README.md` | **验收体系导读 + 目录规范**：三层各防什么事故（smoke 管编译 / ctest 管算法 / apps 与 pyapps 看现象）+ 命名与输出硬契约 + 加东西的检查表 | 往 `demo/` 加任何文件前；或想快速知道"某个用例保护了什么" |
 | `docs/pitfalls.md` | **口径与踩坑**（判据病态、共轴掩盖、holonomy 口径、泛型域、实例化才叫落地） | 判据出怪数、或怀疑"实现错"时 |
 | `docs/eng-competency.md` | **工程能力 60/80 基线**（四赛道检查点、赛道重叠矩阵、本仓现状对照）。**只管"能做出来"** | 评估"这个件做到什么程度算过关"，或对岗位要求时 |
 | `docs/baseline-levels.md` | **四线 × 三档（60/80/90）× 两把尺子**（学习 vs 工程）。覆盖 **数学 / 数学物理 / CG / CS**；含**反例判据（§0.6 一票否决）**与**验证机制（§0.7）** | 自我评估"我到哪一档了"、区分"读懂"与"做出来"、找**降档信号**时 |
-| `docs/interview-map.md` | **三方向 × 学科线的档位要求**（C++ 后端 / 算法测开 / CG）。回答"为了这个方向的面试，每条线要到哪一档"；含 Raft 等具体资产的现状与缺口 | 准备某个方向的面试、判断"这块要不要补"时 |
+| `docs/interview-map.md` | **三方向 × 学科线的档位要求**（C++ 后端 / 算法测开 / CG）。回答"为了这个方向的面试，每条线要到哪一档"；**§5 面试深度 6 问 + §6 明确不做**（原 `interview-depth.md` 已并入） | 准备某个方向的面试、判断"这块要不要补"时 |
 | `graphics/demo/pyapps/tensor-convention.md` | pyapps 层张量记号约定（轴序 = 指标序、上下标进变量名、einsum 即文档） | 写 pyapps 张量脚本时 |
 | `docs/env-git.md` | git 写操作被沙箱拒绝的成因与处理（锁文件清单、worktree 补法） | git 报 `Operation not permitted` / `File exists` 时 |
 | `docs/doc-checkup.md` | 文档体检清单（低频，每月一次） | 大改文档后 |
@@ -33,16 +34,16 @@
 | `11408-notebook/AGENTS.md` | 11408 归档规约（对话/照片 → ipynb，只追加） | 归档或判卷照片时 |
 | `learning-408/README.md` | 408 实践代码导航（**主题 → 代码映射真源**）｜ 独立子仓，只能按绝对路径访问 | 复习 408 要引实践代码时，**先读它再引代码，不得凭记忆编造路径** |
 
-> **已删除（2026-10-26）** —— 下面这些路径**已不存在**，内容都已迁走，别再按旧路径找：
+> **已删除（2026-10-26 / 10-28）** —— 下面这些路径**已不存在**，内容都已迁走，别再按旧路径找：
 >
 > | 已删除 | 内容现在在哪 |
 > |---|---|
 > | `learning-todo/matrix.md`、`docs/matrix.md` | **已彻底删除**。三处接管：红线 → `acceptance.md` §0；**数值契约（除零/容差/错误类型/布局）→ `graphics/numeric-contract.md`**；张量契约 → `tensor.hpp` 头注释。**源码里的 `matrix.md §N` 是历史出处，不是可跳转链接**，解码表见 `numeric-contract.md` §9 |
 > | `learning-todo/route-math.md` | `docs/route-math.md` |
-> | `learning-todo/interview-depth.md` | `docs/interview-depth.md` |
+> | `learning-todo/interview-depth.md` → `docs/interview-depth.md` | **两处都已删除（2026-10-28）**：并入 **`docs/interview-map.md` §5（面试深度 6 问）/ §6（不做）** |
 > | `learning-todo/ns-progress.md` | `docs/math-log.md` |
 > | `learning-todo/{math-plan,fan-plan,lie-plan}.md` | `docs/route-math.md`（口径警告在 `docs/pitfalls.md`） |
-> | `learning-todo/stage1-wrapup.md` | `NOW.md` + `docs/interview-depth.md` |
+> | `learning-todo/stage1-wrapup.md` | `NOW.md` + `docs/interview-map.md` |
 > | `graphics/plan.md` | 红线 → `graphics/acceptance.md` §0；`V*` 编号对照 → §4 |
 >
 > **`docs/logs/` 与 `docs/math-log.md` 的历史条目仍按这些旧路径引用** —— 那些引用现在指向
@@ -61,7 +62,7 @@
 | 类 | 文件 | 允许写什么 |
 |---|---|---|
 | **滚动** | `NOW.md`（**唯一**） | 可以写"接下来做什么"。1–3 周一版，过期**整篇重写**，不追加、不归档、不留历史 |
-| **契约/参考** | `graphics/acceptance.md`、`docs/pitfalls.md`、`docs/route-math.md`、`docs/interview-depth.md`、`tensor-convention.md`、`docs/*.md`、`README.md` | **只写"是什么"。禁止写：下一步、阶段编号、月份、时间表、进度、验收关卡** |
+| **契约/参考** | `graphics/{acceptance,numeric-contract,test-map}.md`、`graphics/demo/README.md`、`docs/pitfalls.md`、`docs/route-math.md`、`docs/interview-map.md`、`tensor-convention.md`、`docs/*.md`、`README.md` | **只写"是什么"。禁止写：下一步、阶段编号、月份、时间表、进度、验收关卡** |
 | **历史** | `docs/logs/<YYYY-MM>.md`（按月的进度日志）、`docs/math-log.md`（数学线日志）、`math-notebook/*.tex`、`learning-todo/imgs/` | append-only，可写日期与既成事实 |
 
 > **产物不进父仓**：二进制/大文件（PNG、会话 ipynb）→ `learning-todo/`（独立仓）。

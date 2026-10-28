@@ -139,23 +139,60 @@ learning/                        viz/                        web/
 
 | 文件 | 一句话 |
 |---|---|
-| `AGENTS.md` | **协作规约与入口**：文档地图、文档三分类（防腐化条款）、命令、代号速查、硬规则、环境坑 |
+### 按「我要回答什么问题」找文档
+
+> 不要按文件名猜。先找你的问题在哪一组。
+
+**① 每次会话开场（必读）**
+
+| 文件 | 内容 |
+|---|---|
 | `NOW.md` | **近期要做什么**（唯一滚动文件，1–3 周一版，过期整篇重写） |
 | `dev-progress.md` | **进度总览**：§0 现状表 + §2 Gate + §5 里程碑（**不含日志正文**） |
-| `docs/logs/<YYYY-MM>.md` | **进度日志**（按月一个文件，append-only，最新在上） |
+| `AGENTS.md` | **协作规约**：文档三分类（防腐化条款）、命令、代号速查、硬规则、环境坑 |
+
+**②「这个东西做到什么程度算过关？」（能力判据）**
+
+| 文件 | 回答什么 |
+|---|---|
+| `docs/baseline-levels.md` | **三档定义的真源** + 四学科线（数学/物理/CG/CS）× 学习/工程两把尺子；含**反例判据（一票否决）**与**验证机制** |
+| `docs/eng-competency.md` | **岗位四赛道**（CAE/HPC/几何/渲染）的 60/80 检查点。**不重写三档定义**，只做赛道映射 |
+| `docs/interview-map.md` | **三个求职方向** × 各学科线要到哪档；含**面试深度 6 问**（§5）与**明确不做**（§6） |
+
+**③ 数学线（路线与记录）**
+
+| 文件 | 内容 |
+|---|---|
 | `docs/route-math.md` | 数学**地图**：十段、双线依赖、每段"看懂线"、不做的边界、Lee 的正确读法 |
-| `learning.md` | 数学**手推题库**（12 阶段经典问题；只是题，不含路线） |
-| `graphics/acceptance.md` | **验收判据规范**：判据五条、闸门与注入、历史 `V*` 编号对照 |
-| `docs/pitfalls.md` | **口径与踩坑**：判据病态、共轴掩盖 bug、holonomy 口径、泛型域、实例化才叫落地 |
-| `docs/eng-competency.md` | **工程能力 60/80 基线**：四赛道检查点、赛道重叠矩阵、本仓现状对照（**不含顺序与期限**） |
-| `docs/baseline-levels.md` | **四线 × 三档（60/80/90）× 两把尺子**（学习 vs 工程）：数学 / 数学物理 / CG / CS；含**反例判据**与**验证机制** |
+| `learning.md` | 数学**手推题库**（只是题，不含路线） |
 | `docs/math-log.md` | 数学线**会话日志**（append-only） |
-| `docs/interview-depth.md` | 面试深度清单 + 本仓实况校正 + 明确不做的边界 |
-| `docs/env-git.md` / `docs/doc-checkup.md` | git 沙箱坑 / 文档体检清单（低频） |
+
+**④ 代码该怎么写、怎么验（`graphics/` 四件套）**
+
+| 文件 | 回答什么 |
+|---|---|
+| `graphics/acceptance.md` | **怎么验**：判据五条、闸门与注入、历史 `V*` 编号对照 |
+| `graphics/numeric-contract.md` | **代码必须满足什么**：除零两层、容差体系、错误类型三分、布局形状 |
+| `graphics/test-map.md` | **已经验了什么、还差什么**：31 个自由函数 → 权威用例 → 判据编号；含闸门漏项 |
+| `graphics/demo/README.md` | **验收体系导读**：三层各防什么事故 + 目录规范 + 加东西的检查表 |
+| `docs/pitfalls.md` | **踩过的坑**：判据病态、共轴掩盖 bug、holonomy 口径、泛型域、实例化才叫落地 |
+
+**⑤ 环境与维护（低频）**
+
+| 文件 | 内容 |
+|---|---|
+| `docs/env-git.md` | git 沙箱坑（`Operation not permitted` 等）+ **remote 统一口径** |
+| `docs/doc-checkup.md` | 文档体检清单（每月一次） |
+| `docs/logs/<YYYY-MM>.md` | **进度日志**（按月一个文件，append-only，最新在上） |
 | `graphics/demo/pyapps/tensor-convention.md` | pyapps 层张量记号约定 |
 
-> **已删除（2026-10-26 / 10-28）**：`graphics/plan.md`、`learning-todo/{math-plan,fan-plan,lie-plan,stage1-wrapup}.md`、
-> **`docs/matrix.md`（设计文档，1197 行）**。
-> 内容已迁走（红线 → `graphics/acceptance.md` §0；张量契约 → `tensor.hpp` 头注释；
-> 数学路线 → `docs/route-math.md`），**不要再按旧路径找内容**；
-> `docs/logs/` 里的历史条目仍按旧路径引用，属历史记录。
+> **已删除（2026-10-26 / 10-28）**，内容均已迁走，**不要按旧路径找**：
+>
+> | 已删 | 内容去向 |
+> |---|---|
+> | `docs/matrix.md`（1197 行） | 红线 → `graphics/acceptance.md` §0；**数值契约 → `graphics/numeric-contract.md`**；张量契约 → `tensor.hpp` 头注释 |
+> | `graphics/plan.md` | 红线 → `acceptance.md` §0；阶段计划本身**已退役**（腐化成过期文档） |
+> | `docs/interview-depth.md` | **并入 `docs/interview-map.md` §5（面试深度 6 问）/ §6（不做）** |
+> | `learning-todo/{math-plan,fan-plan,lie-plan,stage1-wrapup}.md` | 数学路线 → `docs/route-math.md`；其余为已退役的计划 |
+>
+> `docs/logs/` 里的历史条目仍按旧路径引用，**属历史记录，不修**。
