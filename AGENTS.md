@@ -17,6 +17,8 @@
 | `docs/route-math.md` | 数学**地图**（十段、依赖顺序、每段"看懂线"、不做的边界、Lee 读法） | 讲数学、判断先后顺序时 |
 | `learning.md` | 数学**手推题库**（12 阶段经典问题）。**只是题，不含路线** | 讲数学题时，**只读相关阶段** |
 | `graphics/acceptance.md` | **验收判据规范**（怎么算通过；含已退役 `V*` 编号对照） | 写/改任何 ctest 用例前 |
+| `graphics/numeric-contract.md` | **数值契约**（`D7`/`D12`/`D16`/`D19` 完整内容：除零两层、容差体系、错误类型三分、布局形状）。接管已删除 `matrix.md` 的契约部分 | 写任何 `src/` 数值代码前；看到源码里裸 `D12`/`§10.8` 引用时 |
+| `graphics/test-map.md` | **接口 ↔ 测试可追溯图**（40 个公开入口 → 权威用例 → 判据编号；含已知断点） | 想知道"某接口被什么测了"、新增入口/用例、或怀疑覆盖有洞时 |
 | `docs/pitfalls.md` | **口径与踩坑**（判据病态、共轴掩盖、holonomy 口径、泛型域、实例化才叫落地） | 判据出怪数、或怀疑"实现错"时 |
 | `docs/eng-competency.md` | **工程能力 60/80 基线**（四赛道检查点、赛道重叠矩阵、本仓现状对照）。**只管"能做出来"** | 评估"这个件做到什么程度算过关"，或对岗位要求时 |
 | `docs/baseline-levels.md` | **四线 × 三档（60/80/90）× 两把尺子**（学习 vs 工程）。覆盖 **数学 / 数学物理 / CG / CS**；含**反例判据（§0.6 一票否决）**与**验证机制（§0.7）** | 自我评估"我到哪一档了"、区分"读懂"与"做出来"、找**降档信号**时 |
@@ -35,7 +37,7 @@
 >
 > | 已删除 | 内容现在在哪 |
 > |---|---|
-> | `learning-todo/matrix.md`、`docs/matrix.md` | **已彻底删除**（红线 → `acceptance.md` §0；张量契约 → `tensor.hpp` 头注释）|
+> | `learning-todo/matrix.md`、`docs/matrix.md` | **已彻底删除**。三处接管：红线 → `acceptance.md` §0；**数值契约（除零/容差/错误类型/布局）→ `graphics/numeric-contract.md`**；张量契约 → `tensor.hpp` 头注释。**源码里的 `matrix.md §N` 是历史出处，不是可跳转链接**，解码表见 `numeric-contract.md` §9 |
 > | `learning-todo/route-math.md` | `docs/route-math.md` |
 > | `learning-todo/interview-depth.md` | `docs/interview-depth.md` |
 > | `learning-todo/ns-progress.md` | `docs/math-log.md` |
