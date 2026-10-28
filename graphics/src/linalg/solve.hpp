@@ -1,11 +1,75 @@
 #pragma once
 
+// ===========================================================================
+// linalg/solve.hpp —— LU 分解与线性方程组求解
+// ===========================================================================
+//
+// 【状态】已实现。
+//
+// ---------------------------------------------------------------------------
+// 一、API 契约
+// ---------------------------------------------------------------------------
+//   template <typename T> struct LUResult { Matrix<T> L, U; std::vector<int> piv; };
+//
+//   template <CommutativeScalar T> LUResult<T> LU(const Matrix<T>& A);
+//   template <CommutativeScalar T> Matrix<T>   Solve(const Matrix<T>& A, Matrix<T> B);
+//   template <CommutativeScalar T> void        SwapRow(Matrix<T>& A, int r1, int r2);
+//   template <CommutativeScalar T> void        SwapMultipliers(Matrix<T>& L, int r1, int r2, int upto);
+//
+// 形状: A 必须 n×n 方阵。
+//   · 非方阵                    -> throw std::invalid_argument
+//   · 主元 |p| <= DefaultTol<T>(n) -> throw std::runtime_error (消息带容差与位置)
+//   · Solve: A.Rows() != B.Rows() -> throw std::invalid_argument
+//
+// 返回: P·A = L·U, 其中 P 由 `piv` 记录 (piv[i] = 第 i 步与谁交换)。
+//       L 为单位下三角, U 为上三角。
+//       Solve(A,B) 返回 X 使 A·X = B, **X 与 B 同形状** (B 可以是矩阵 = 多右端项)。
+//
+// 关键口径: 全库**列向量** (D19)。所以 Solve(A, b) 的 b 是 n×1 列向量,
+//   矩阵形式 A·X = B 是自然序, **不是** X·A = B。
+//
+// ---------------------------------------------------------------------------
+// 二、调用顺序 / 内部机制
+// ---------------------------------------------------------------------------
+//   LU: 逐列消元, **每列都选主元** (列主元 = 部分选主元)。
+//       piv[j] 记录第 j 步换了哪一行; L 存乘子, U 存消元结果。
+//   Solve: 先用同一套消元把 B 一起做行变换, 再回代。不显式求 A^{-1}
+//          —— 求逆的 flops 是解方程的数倍, 且精度更差。
+//   SwapMultipliers: 换 U 的行时, L 里**已经算好的乘子**必须跟着搬。
+//
+// ---------------------------------------------------------------------------
+// 三、数学推导 / 踩坑
+// ---------------------------------------------------------------------------
+// 【为什么必须选主元 —— 不选会"数据爆炸"】
+//   反例: 主元 1e-20, 下一行除以它得 1e20。这不是精度问题, 是**完全不可用**。
+//   选主元 (把当前列绝对值最大的行换上来) 让乘子 |l_ij| <= 1, 误差可控。
+//   判据: 不选主元的 LU 在 [[ε,1],[1,1]] 这类矩阵上会给出垃圾 —— 手算就能看出。
+//
+// 【为什么 piv 记录换行就够 —— P 不必显式存】
+//   "怎么重排 A 使得 PA 可以无痛分解成 LU" 这句话就是 piv 的全部语义。
+//   需要 P 时按 piv 从单位阵重放一遍即可; 存一个大矩阵反而多一份不同步的风险。
+//
+// 【乘子必须跟着换行 —— 修过的 bug】
+//   L(i,k) 的语义是「**当时坐在位置 i 的那一行**的乘子」。行换了位置,
+//   这段历史也得跟着走, 否则 L·U 复现的不是 PA 而是某个错位的东西。
+//   ⚠ 只换 [0, upto) 这一段: 更右的乘子还没算出来; 而单位下三角的对角 1
+//     与行号绑定, 整行换会把 1 搬到上三角 —— 结构当场就坏。
+//   这类错**不会**让 L·U 变成明显的垃圾, 而是给出"数字看着合理但解错"的结果。
+//
+// 【容差为什么不在这里定义】
+//   DefaultTol<T>(n) 在 core/scalar.hpp —— solve / inverse / cholesky / eigen /
+//   svd 共用同一份。放在这里会让其它文件为了取容差而 include solve.hpp,
+//   形成不必要的依赖链。见 numeric-contract.md §4。
+// ===========================================================================
+
+#include <limits>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
 #include "core/common.hpp"
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
-#include <limits>
-#include <stdexcept>
-#include <vector>
 
 template <typename T>
 struct LUResult
@@ -36,11 +100,8 @@ void SwapMultipliers(Matrix<T> &L, int r1, int r2, int upto)
     }
 }
 
-// DefaultTol<T>(n) 已上移到 core/scalar.hpp 标量层 (2026-10-14, S2a):
-// 它是 D12 的容差策略, solve / inverse / cholesky / eigen / svd 共用。
-
-// piv记录换行, 本质上就是在说, 怎么重排A使得PA可以无痛分解成LU, 当然B也得重排
-// eg 1 / 1e-20 = 1e20数据爆炸, 没办法用, 必须用小数
+// piv 记录换行 (为什么 P 不必显式存, 见文件头「三」)
+// 反例: 1 / 1e-20 = 1e20, 数据爆炸 —— 这就是必须选主元的原因。
 template <CommutativeScalar T>
 LUResult<T> LU(const Matrix<T>& A)
 {
@@ -67,7 +128,7 @@ LUResult<T> LU(const Matrix<T>& A)
             }
         }
         if (ScalarTraits<T>::abs2(max_val) <= tol * tol) {
-            // D12: 算法失败 -> throw 带上下文(容差), 消息类型中立
+            // 算法失败 -> throw, 消息带上下文 (容差 + 位置)
             throw std::runtime_error("LU: 主元近奇异 (判据 |p| <= tol, tol = 8*n*eps)");
             return result;
         }

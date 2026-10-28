@@ -1,6 +1,6 @@
 // cholesky.cpp -- linalg/cholesky.hpp 验收 (S2a / V2.2)
 //
-// 判据 (matrix.md §10.9 第 2 条: 判据先行) —— 先写"多少算对", 再对着判据写实现:
+// 判据 (判据先行) —— 先写"多少算对", 再对着判据写实现:
 //   ① 重构: ‖L·Lᴴ − A‖∞ < 1e-8  (double 与 Complex<double> 共用同一份 linalg 源码, V1.1)
 //   ② V2.2 硬指标: SPD 矩阵上解同一方程组, Cholesky 解 与 LU(Solve) 解 之差 < 1e-8,
 //      且 Cholesky 各自的残差 ‖A·X − B‖∞ < 1e-10

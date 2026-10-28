@@ -1,11 +1,11 @@
 // scalar_traits.cpp — 标量层契约验收 (Scalar / CommutativeScalar / fromReal / conj / abs2)
 //
 // 为什么要有这个 demo:
-//   1. matrix.md §1.2 的 concept 是"同一份 linalg 源码支持 float/Complex/Dual"的地基
-//      (plan.md V1.1 的硬验收)。契约一旦被破坏, 报错会出现在 linalg 的模板深处,
-//      极难定位 —— 静态断言把它钉在编译期。
-//   2. matrix.md §1.3 铁律要求"CommutativeScalar 用单测验证 a*b == b*a", 本文件即该单测。
-//   3. §7.1 第 2 条的常数通道 fromReal(real_t) 曾经缺失(代码里是 const_n),
+//   1. Scalar concept 是"同一份 linalg 源码支持 float/Complex/Dual"的地基。
+//      契约一旦被破坏, 报错会出现在 linalg 的模板深处, 极难定位 ——
+//      静态断言把它钉在编译期。
+//   2. 交换律铁律: CommutativeScalar 要求"用单测验证 a*b == b*a", 本文件即该单测。
+//   3. 常数通道 fromReal(real_t) 曾经缺失(代码里是 const_n),
 //      导致 Complex<T>::sqrt 一实例化就编译错 —— 现按设计文档补齐并在此锁住。
 //
 // 编译与运行(由 CMake 注册为 ctest 用例):
@@ -66,7 +66,7 @@ void check_true(const char* name, bool ok)
 // ---------------------------------------------------------------------------
 void test_from_real()
 {
-    std::printf("\n[1] fromReal(real_t): 任意实数常数的唯一入口 (matrix.md 7.1 第 2 条)\n");
+    std::printf("\n[1] fromReal(real_t): 任意实数常数的唯一入口\n");
 
     check("float 恒等", ScalarTraits<float>::fromReal(0.5f), 0.5);
     check("double 恒等", ScalarTraits<double>::fromReal(0.5), 0.5);
@@ -86,7 +86,7 @@ void test_from_real()
 }
 
 // ---------------------------------------------------------------------------
-// 3. conj / abs2 (matrix.md 1.2 表 + 7.1 第 6 条)
+// 3. conj / abs2 (conj 对 Dual 必须逐分量 —— 见 dual.hpp 末尾)
 // ---------------------------------------------------------------------------
 void test_conj_abs2()
 {
@@ -97,7 +97,7 @@ void test_conj_abs2()
     check("Complex abs2", ScalarTraits<C>::abs2(C(3, 4)), 25.0);
 
     // Dual: conj 逐分量转发基域共轭 —— epsilon 分量也要 conj
-    // (逐分量对、只 conj(epsilon) 错: d(z̄) = conj(dz), matrix.md 7.1 第 6 条)
+    // (逐分量对、只 conj(epsilon) 错: d(z̄) = conj(dz))
     D x(3.0f, 4.0f);
     D xc = ScalarTraits<D>::conj(x);
     check("Dual conj value", xc.value, 3.0);
@@ -115,11 +115,11 @@ void test_conj_abs2()
 }
 
 // ---------------------------------------------------------------------------
-// 4. 交换律单测 (matrix.md 1.3 铁律: CommutativeScalar 必须 a*b == b*a)
+// 4. 交换律单测 (CommutativeScalar 必须 a*b == b*a)
 // ---------------------------------------------------------------------------
 void test_commutative()
 {
-    std::printf("\n[3] 交换律 a*b == b*a (matrix.md 1.3 铁律要求单测)\n");
+    std::printf("\n[3] 交换律 a*b == b*a (CommutativeScalar 的硬要求)\n");
 
     C a(1.5, 2.5), b(-0.5, 3.0);
     C ab = a * b, ba = b * a;

@@ -1,20 +1,91 @@
 #pragma once
 
+// ===========================================================================
+// linalg/inverse.hpp —— 求逆 (按结构分发) + 结构探测
+// ===========================================================================
+//
+// 【状态】已实现。
+//
+// ---------------------------------------------------------------------------
+// 一、API 契约
+// ---------------------------------------------------------------------------
+// 结构探测 (全部要求 n×n; 非方阵一律返回 false, 不抛):
+//   bool is_diagonal(A, tol)           所有非对角元 |a_ij| <= tol
+//   bool is_symmetric(A, tol)          A == Aᵀ  (实域; Hermitian 走 is_hermitian)
+//   bool is_orthogonal(A, tol)         Aᵀ·A == I
+//   bool is_positive_definite(A, tol)  **Cholesky 能否走通** (见末尾)
+//
+// 求逆的两级入口:
+//   Matrix<T> Inverse(A, MatrixKind kind)   按 kind 分发到对应快路径
+//   Matrix<T> Inverse(A)                    先 Classify 探测, 再分发
+//
+// 五条并列的快路径 (**互不复用实现**):
+//   InverseDiagonal / InverseSymmetric / InverseOrthogonal /
+//   InverseSymmetricPositiveDefinite / InverseGeneral (LU)
+//   外加 qr_inverse (走 A^{-1} = R^{-1}·Q^H) —— 它**不接** Inverse 分发。
+//
+// 异常:
+//   · 非方阵 / 空矩阵            -> throw std::invalid_argument
+//   · 奇异 (|pivot| <= tol)      -> throw std::runtime_error
+//   · Projection 类 (A²=A≠I)     -> throw std::logic_error (不可逆)
+//
+// 关键口径: 全库**列向量** (D19); 容差由调用方显式给 (两层除零, D12)。
+//
+// ---------------------------------------------------------------------------
+// 二、调用顺序 / 内部机制
+// ---------------------------------------------------------------------------
+//   `Inverse(A)` = Classify(A, DefaultTol) -> Inverse(A, kind)。
+//   Classify 的**探测顺序有讲究**: 越特殊的档越先判。见末尾「为什么顺序错会
+//   让一整个分支永远不可达」。
+//   依赖方向: core -> solve / cholesky / qr -> inverse -> eigen (单向, 无循环)。
+//
+// ---------------------------------------------------------------------------
+// 三、数学推导 / 踩坑
+// ---------------------------------------------------------------------------
+// 【SPD 判据 = "Cholesky 不选主元能否走通"】
+//   存在性定理是**双向**的: A 正定 ⟺ Cholesky 走通。所以这不是"近似判断",
+//   而是等价判据 —— 这也是"用算法本身当判据"少数正当的场合。
+//   好处: 不必算特征值 (O(n³) 且更贵), 复用同一个分解。
+//
+// 【五条快路径为什么不复用实现】
+//   每条路径的**数值性质不同**: 对角阵直接取倒数 (零误差), 正交阵用 A⁻¹ = Aᵀ
+//   (零误差), SPD 走 Cholesky (半 flops), 通用走 LU (要选主元)。
+//   强行抽公共层会把"零误差"降级成"微小误差", 而结构判据恰恰要靠这种精确性。
+//   ⇒ 宁可有五份短代码, 不要一份"通用"的长代码。
+//
+// 【Classify 的探测顺序 —— 修过的 bug】
+//   曾经把 is_symmetric 排在 is_diagonal 前面, 于是对角阵 (也是对称的) 全部
+//   被对称分支吃掉, **对角分支永远不可达**。这类错不会报错, 只是某条快路径
+//   成了死代码 —— 而它在测试里看起来"也对", 因为对称路径同样能算对。
+//   ⇒ 判据: 每加一个 MatrixKind, 必须有**专门**用例证明它被单独命中,
+//     不能只看"结果对"。见 demo/linalg/inverse.cpp 的 mid 分支覆盖。
+//
+// 【为什么 qr_inverse 不接 Inverse 分发】
+//   QR 是**算法**, 不是**结构**。MatrixKind 描述的是"矩阵长什么样",
+//   QR 描述的是"用什么方法算"。混进分发会逼着枚举里出现"我想用 QR"这种
+//   非结构项, 语义就乱了。⇒ 求逆的默认路径是 LU; 需要 QR 就显式调
+//   qr_inverse —— 这是调用方的选择, 不是容器的属性。
+//
+// 【A^H 与 A^T —— 复数域的陷阱】
+//   本文件所有"正交/对称"判据在复数域必须用 Adjoint 而不是 Transpose。
+//   用错时 double 域完全正常, Complex 域静默给出错误结论。
+// ===========================================================================
+
 #include <stdexcept>
+
 #include "core/common.hpp"      // MatrixKind 已定义于此, 直接复用不重复定义
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
 
-#include "linalg/solve.hpp"   // LU / Solve / DefaultTol (S1 已落地, 2026-10-14)
-//   LUResult{L,U,piv} / LU(A) / Solve(A,b) 解 A·x = b, 教科书列向量约定, D19 修订版
-#include "linalg/cholesky.hpp" // cholesky / cholesky_solve (S2a 已落地, 2026-10-14)
-//   SPD 判据 = "Cholesky 不选主元能否走通" (matrix.md §3.2) —— 本文件只做分发, 不重复实现分解
-#include "linalg/qr.hpp"       // QR_Householder (S6b 已落地) —— qr_inverse 走 A^{-1} = R^{-1}·Q^H
-//   qr.hpp 只 include core/* + operator.hpp, **不反向依赖本文件**, 故无循环。
-//   (eigen.hpp 反过来 include 本文件, 于是顺序是 core -> solve/cholesky/qr -> inverse -> eigen。)
+#include "linalg/solve.hpp"
+//   LUResult{L,U,piv} / LU(A) / Solve(A,b) —— 列向量约定 (D19)
+#include "linalg/cholesky.hpp"
+//   SPD 判据 = "Cholesky 不选主元能否走通" —— 本文件只做分发, 不重复实现分解
+#include "linalg/qr.hpp"
+//   qr_inverse 走 A^{-1} = R^{-1}·Q^H; qr.hpp 不反向依赖本文件, 故无循环
 
-// ---- 结构探测: 每个判断是一次数学练习 (matrix.md §3.2) ----
-// D7: 比较用 abs2, 共轭用 conj, 算法层零分支; D12: 容差 tol 由调用方给
+// ---- 结构探测: 每个判断是一个数学练习 ----
+// 比较一律走 abs2, 共轭走 conj, 算法层零实复分支; 容差由调用方给。
 template <CommutativeScalar T>
 bool is_diagonal(const Matrix<T>& A, typename ScalarTraits<T>::real_t tol)
 {
@@ -60,7 +131,7 @@ bool is_orthogonal(const Matrix<T>& A, typename ScalarTraits<T>::real_t tol)
 }
 // A·A^H ≈ I: 实数域=正交, 复数域=酉 (traits 写法免费升级)
 
-// SPD 判据 (matrix.md §3.2): "Cholesky 不选主元能否走通" —— 存在性定理 A 正定 <=> 分解走通。
+// SPD 判据: "Cholesky 不选主元能否走通" —— 存在性定理 A 正定 <=> 分解走通 (理由见文件头「三」)。
 // 只把 cholesky 抛出的 runtime_error (非正定 / 近奇异) 解读为"否"; 别的异常照常外传, 不吞。
 template <CommutativeScalar T>
 bool is_positive_definite(const Matrix<T>& A)
@@ -83,7 +154,7 @@ MatrixKind Classify(const Matrix<T>& A, typename ScalarTraits<T>::real_t tol)
     if (is_orthogonal(A, tol)) return MatrixKind::Orthogonal;
     if (is_symmetric(A, tol)) {
         // SPD ⊂ Symmetric, 必须在这条**对称分支内部**筛子类。平铺成同级 if 的话,
-        // 上一行先 return Symmetric 就把它吃掉了, 本档永远不可达 —— S2a-2 的坑。
+        // 上一行先 return Symmetric 就把它吃掉了, 本档永远不可达。
         if (is_positive_definite(A)) return MatrixKind::SymmetricPositiveDefinite;
         return MatrixKind::Symmetric;
     }
@@ -99,7 +170,7 @@ Matrix<T> lu_inverse(const Matrix<T>& A)
     Matrix<T> I = Matrix<T>::Identity(A.Rows());
     return Solve(A, I);
 }
-// 奇异判定: 选主元 |pivot|^2 <= tol 则抛 (D12)
+// 奇异判定: 选主元 |pivot|^2 <= tol 则抛
 
 
 template <CommutativeScalar T>
@@ -108,16 +179,16 @@ Matrix<T> diagonal_inverse(const Matrix<T>& A, typename ScalarTraits<T>::real_t 
     if (A.Rows() != A.Cols()) throw std::invalid_argument("diagonal_inverse: A 必须是方阵");
     Matrix<T> B(A.Rows(), A.Cols());
     for (int i = 0; i < A.Rows(); i++) {
-        if (ScalarTraits<T>::abs2(A(i, i)) <= tol * tol)   // 判据 |d| <= tol (D12), 比较走 abs2
+        if (ScalarTraits<T>::abs2(A(i, i)) <= tol * tol)   // 判据 |d| <= tol, 比较走 abs2
             throw std::runtime_error("diagonal_inverse: 对角元近奇异 (判据 |d| <= tol)");
         B(i, i) = ScalarTraits<T>::one() / A(i, i);
     }
     return B;
 }
-// 对角元倒数, 零/近零抛 (D12)
+// 对角元倒数, 零/近零抛
 
 
-// A = L·L^H, A^{-1} = (L^{-1})^H·L^{-1}   —— S2a-2 接入
+// A = L·L^H, A^{-1} = (L^{-1})^H·L^{-1}   
 // cholesky_solve(A, I) 展开正是 "L·Y = I 前代 + L^H·X = Y 回代", 与上式同一条路径,
 // 于是直接复用那份压过 98 项验收的代码, 不另写一遍三角求逆 (少一份要维护的正确性)。
 template <CommutativeScalar T>
@@ -125,14 +196,14 @@ Matrix<T> cholesky_inverse(const Matrix<T>& A)
 {
     if (A.Rows() != A.Cols() || A.Rows() == 0)
         throw std::invalid_argument("cholesky_inverse: A 必须是非空方阵");
-    return cholesky_solve(A, Matrix<T>::Identity(A.Rows()));   // A 非正定在此 throw (D12)
+    return cholesky_solve(A, Matrix<T>::Identity(A.Rows()));   // A 非正定在此 throw
 }
 
 // A = Q·R (thin; 方阵时 Q、R 都是 n×n), A^{-1} = R^{-1}·Q^H。
 // 只做两件**已有**的事: ① Householder QR (qr.hpp) ② 对上三角 R 的一次回代 (R·X = I ⇒ X = R^{-1})。
 // 不写成 Solve(R, I): R 本身已经上三角, 再走一遍 LU 等于把 O(n³) 又花一遍;
 // 也不显式求 R^{-1} 再去乘 —— 回代逐列解出 X 就是同一件事的紧凑写法 (与 qr.hpp 自带注释同口径)。
-// 奇异判据沿用 lu_inverse / diagonal_inverse 的口径: |R_ii| <= tol ⇒ 抛 (D12)。
+// 奇异判据沿用 lu_inverse / diagonal_inverse 的口径: |R_ii| <= tol ⇒ 抛。
 // 注意它**不接矩阵分发**: MatrixKind 里没有 QR 档 (也不该有 —— QR 是算法不是结构),
 // 所以本函数与 lu_inverse / cholesky_inverse 并列, 是一条"显式点名"的独立路径。
 template <CommutativeScalar T>
@@ -160,7 +231,7 @@ Matrix<T> qr_inverse(const Matrix<T>& A)
     return X * qr.Q.Adjoint();                          // R^{-1}·Q^H
 }
 
-// ---- 对外入口 (matrix.md §3.2 枚举分发) ----
+// ---- 对外入口 (按 MatrixKind 枚举分发) ----
 
 // 已知结构: 跳过探测直接走该结构对应的实现 (Orthogonal 直接 A.Adjoint(), A^{-1} = A^H)。
 template <CommutativeScalar T>

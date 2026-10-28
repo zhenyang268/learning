@@ -7,7 +7,7 @@ target_include_directories(scalar_traits PRIVATE
 
 add_test(NAME scalar_traits COMMAND scalar_traits)
 
-# Tensor / TensorView (matrix.md §6 第三次订正 / 决策表 #21, 2026-10-23)
+# Tensor / TensorView (契约真源: acceptance.md 红线 #4)
 # 容器只准哑; 运算一律自由函数 (plan.md 红线 #4 修订后仍如此)
 add_executable(tensor tensor.cpp)
 target_include_directories(tensor PRIVATE

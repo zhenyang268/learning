@@ -30,7 +30,7 @@ using std::string;
 using std::vector;
 
 // 二元算子表: 与 GradNode::Forward 的 switch 一一对应 (四则 + 逐元素幂 + 矩阵乘)。
-// 节点 arity 由 inputs.size() 运行时携带(matrix.md 7.5 第 6 条), 缺输入时
+// 节点 arity 由 inputs.size() 运行时携带, 缺输入时
 // node1/node2 是 nullptr —— 靠这张表在 Forward 入口先拦住, 不然解引用就是段错误。
 inline bool IsBinaryOp(GradOp op)
 {
@@ -162,7 +162,7 @@ public:
                 matrix = std::move(node1->matrix.cwiseProduct(node2->matrix));
                 break;
 
-            // 逐元素幂运算: 未实现(按 matrix.md 7.5 第 6 条应建图拆链 exp(y*ln x))
+            // 逐元素幂运算: 未实现 (应建图拆链为 exp(y*ln x))
             case GradOp::CWisePow:
                 throw std::logic_error("CWisePow: 未实现");
             
@@ -185,11 +185,11 @@ public:
             // z = f(x) = g(y) (y和x是换元)
             case GradOp::Inverse:
                 // 未实现。注意: `linalg::Inverse` **早已落地** (V1.2, 2026-10-14),
-                // 原注释"待 linalg::Inverse 落地 (阶段 1)"已过期 —— 现在的阻塞不是依赖,
+                // 原注释"待 linalg::Inverse 落地"已过期 —— 现在的阻塞不是依赖,
                 // 而是本节点没接入 (矩阵求逆的伴随公式本身已写好, 见 Backward 同名 case)。
                 throw std::logic_error("Inverse: 本节点未接入 (linalg::Inverse 已可用)");
 
-            // 激活函数: 未实现(按 matrix.md 7.5 第 6 条, Sigmoid/Tanh 应拆链,
+            // 激活函数: 未实现 (Sigmoid/Tanh 应拆链,
             // Relu/Softmax 因数值保留 fused 枚举)
             case GradOp::Sigmoid:
                 throw std::logic_error("Sigmoid: 未实现");

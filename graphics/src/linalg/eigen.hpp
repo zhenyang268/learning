@@ -8,12 +8,79 @@
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
 #include "core/complex.hpp"
-#include "linalg/inverse.hpp"   // is_symmetric(A, tol) + DefaultTol<T>(n) (S2/S2a-2 已落地)
+#include "linalg/inverse.hpp"   // is_symmetric(A, tol) + DefaultTol<T>(n)
 
-/** 列向量约束
- * 1. 左乘矩阵代表坐标系变换 Vy Py = Vx Px, Vy = Vx G, Px = G Py
- * 2. 所以GTAG就代表, 换坐标系, 运算, 再换回去
- */
+// ===========================================================================
+// linalg/eigen.hpp —— 特征分解 (对称 / Hermitian)
+// ===========================================================================
+//
+// 【状态】已实现。**仅限对称 / Hermitian**; 非对称走 `eig()` 会明确 throw。
+//
+// ---------------------------------------------------------------------------
+// 一、API 契约
+// ---------------------------------------------------------------------------
+//   template <typename T> struct Eigendecomposition { Matrix<T> Q, Lamda; };
+//   template <CommutativeScalar T> Eigendecomposition<T> eig(const Matrix<T>& A);
+//   template <CommutativeScalar T> Eigendecomposition<T> eig_symmetric(const Matrix<T>& A);
+//
+//   返回: Q 为 n×n, **特征向量按列**存放 (酉/正交); Lamda 为 n×n 对角阵。
+//   满足 A = Q·Λ·Q^H。
+//
+// 形状: A 必须 n×n 非空方阵。
+//   · 非方阵 / 空   -> throw std::invalid_argument
+//   · 非对称/Hermitian -> `eig` 抛 std::logic_error (提示需 Hessenberg+QR)
+//   · Jacobi 超迭代上限 -> throw std::runtime_error
+//
+// 不变量:
+//   · **特征值恒为实数** —— 这是 Hermitian 的结构决定的, 与标量 T 无关。
+//     所以 Lamda 的对角元虽然是 Matrix<T> 类型, 实部就是全部信息, 虚部为 0。
+//   · Q^H·Q = I (酉/正交)。
+//   · **返回顺序**按迭代收敛顺序, **不保证升序或降序** —— 需要有序请自行排序。
+//
+// 域: CommutativeScalar。
+//
+// ---------------------------------------------------------------------------
+// 二、调用顺序 / 内部机制
+// ---------------------------------------------------------------------------
+//   `eig(A)` 是**分发器**: 先 is_symmetric(A, DefaultTol) 探测, 对称/Hermitian
+//   就走 eig_symmetric, 否则 throw。它不实现算法。
+//   `eig_symmetric(A)` 才是本体: cyclic Jacobi 迭代, 反复把最大非对角元
+//   旋到 0, 直到整个非对角块 <= tol。
+//     · jacobi_rotation: 一次 2×2 Hermitian 子块旋转 (解析式见实现处)
+//     · 收敛判据: off(A) <= DefaultTol<T>(n) · ‖A‖_F  (相对, 见末尾)
+//
+// ---------------------------------------------------------------------------
+// 三、数学推导 / 踩坑
+// ---------------------------------------------------------------------------
+// 【相似变换的直觉 —— 为什么特征分解在几何上是"换坐标系"】
+//   左乘矩阵 = 坐标系变换。若 Vy·Py = Vx·Px 且 Vy = Vx·G, 则 Px = G·Py。
+//   于是 "在 x 系里算一次 A" 等价于 "在 y 系里算 GᵀAG, 再换回来":
+//       A_x = Gᵀ · A_y · G
+//   Jacobi 就是在反复挑一个 G (只在一个 2×2 平面上转), 让非对角元变小。
+//   收敛后 GᵀAG 是对角阵 ⇒ G 的列就是特征向量, 对角元就是特征值。
+//
+// 【2×2 Hermitian 子块的一次旋转 —— 解析式】
+//   子块 A2 = [[a, z], [conj(z), b]]  (Hermitian 对角元必为实, 故 a,b 用 real_t)
+//   取酉阵 U = [[c, -s·ph], [s·conj(ph), c]],  c=cosθ, s=sinθ, ph = z/|z| = e^{iφ}
+//   直接验算 U^H·A2·U 的 (p,q) 元 = e^{iφ}·(ρ·cos2θ − (a−b)·sin2θ/2),  ρ = |z|
+//   取零当且仅当
+//       tan(2θ) = 2|z| / (a − b)    即    θ = 0.5·atan2(2|z|, a − b)
+//   复数域比实对称只多一个相位: 实对称下 z 为实数, ph = ±1, U 退化成普通实旋转。
+//   旋转后的两个对角元就是该子块的特征值, 写成解析式 (比 c²a+s²b+2cs|z| 少一次相消):
+//       a' = (a+b)/2 + D/2,   b' = (a+b)/2 − D/2,   D = hypot(a−b, 2|z|)
+//   ⚠ a', b' 与 θ 的取法**必须配套**: 取 θ+π/2 同样能消零, 但会把两个特征值对调。
+//     这类"两边都能消零但配错"的错, 数值判据 (看非对角元是否为 0) 抓不到,
+//     只有"对角元和 == trace"这类判据能抓。
+//
+// 【收敛判据必须相对 —— 踩过的坑】
+//   绝对阈值在 ‖A‖ 大时永远不收敛 (非对角元残渣跟着 ‖A‖ 涨), 在 ‖A‖ 很小时
+//   则过早停。用 off(A) <= tol·‖A‖_F。见 numeric-contract.md §4.1。
+//
+// 【为什么特征值一定实数 —— 结构决定, 不是算法保证】
+//   Hermitian 的定义就是 A^H = A, 于是 x^H·A·x 是实数, 特征值 = 该 Rayleigh 商。
+//   实现里 Lamda 仍存成 Matrix<T> (因为 T 可能是 Complex), 但虚部恒为 0;
+//   判据一律走 ScalarTraits<T>::real() 取实部再比。
+// ===========================================================================
 
 // ---- 结果 (特征值恒为实数 —— Hermitian 的结构决定, 与标量无关) ----
 template <typename T>
@@ -25,7 +92,7 @@ struct Eigendecomposition
 };
 
 // ---- ① 主入口: Q 与 Λ ----
-// 仅限对称/Hermitian (plan.md 阶段 1 范围); 非对称矩阵特征值可能为复数, 属阶段 2 (matrix.md §3.3)。
+// 仅限对称/Hermitian; 非对称矩阵特征值可能为复数, 需 Hessenberg + QR (未做)。
 template <CommutativeScalar T>
 Eigendecomposition<T> eig(const Matrix<T>& A)
 {
@@ -34,7 +101,7 @@ Eigendecomposition<T> eig(const Matrix<T>& A)
     if (is_symmetric(A, DefaultTol<T>(A.Rows())))   // 实对称与 Hermitian 统一走这一支
         return eig_symmetric(A);
     throw std::logic_error(
-        "eig: 非对称/Hermitian 矩阵的特征值可能为复数, 需阶段 2 的 Hessenberg+QR (matrix.md §3.3)");
+        "eig: 非对称/Hermitian 矩阵的特征值可能为复数, 需 Hessenberg+QR (未实现)");
 }
 
 // ---- ② 2x2 Hermitian 子块的一次 Jacobi 旋转 ----
@@ -163,6 +230,6 @@ Eigendecomposition<T> eig_symmetric(const Matrix<T>& A)
 }
 
 
-// ---- ④ 预留: 阶段 2 (非对称可能有复特征值), 只声明不实现 ----
+// ---- ④ 预留 (非对称可能有复特征值), 只声明不实现 ----
 // Eigendecomposition<T> eig(const Matrix<T>& A, General);
 // std::vector<Complex<real_t>> eigenvalues(const Matrix<T>& A, General);

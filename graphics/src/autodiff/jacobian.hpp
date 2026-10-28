@@ -10,7 +10,7 @@
 #include "core/scalar.hpp"
 #include "autodiff/dual.hpp"
 
-// DualFunc: 计划中的逐元素函数类型 (matrix.md §7.1 第 5 条, 目标签名 T(const T&))
+// DualFunc: 逐元素函数类型 (目标签名 T(const T&))
 // 当前函数节点走 FunctionType 枚举, DualFunc 暂无使用者 —— 别名占位
 template <typename T>
 using DualFunc = std::function<T(const T&)>;
@@ -175,7 +175,7 @@ Matrix<Dual<T>> LocalDeriv(const Matrix<Dual<T>>& A, const Matrix<FunctionType>&
     return D;
 }
 
-// ---- Matrix 级约简包装 (matrix.md §7.1 第 4 条) ----
+// ---- Matrix 级约简包装 ----
 // Dual 级原语 sumLine/multLine 在 dual.hpp (Dual 域约简, dual.hpp 不能
 // 反向 include matrix.hpp, 故 Matrix 级包装只能放在本文件)
 

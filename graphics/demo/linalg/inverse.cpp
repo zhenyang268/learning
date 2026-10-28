@@ -1,6 +1,6 @@
 // inverse.cpp -- linalg/inverse.hpp 验收 (S2: Inverse 分发; S2a-2: SPD 档接入; S-App6: qr_inverse)
 //
-// 判据 (matrix.md §10.9 第 2 条: 判据先行):
+// 判据清单 (判据先行: 先写「多少算对」再写实现):
 //   ① V1.2 硬指标: 随机矩阵 ‖A·A⁻¹ − I‖∞ < 1e-8, 且 ‖A⁻¹·A − I‖∞ < 1e-8
 //   ② double 与 Complex<double> 共用同一份 linalg 源码 (V1.1)
 //   ③ 结构分支: 对角 -> 逐元倒数; 正交(旋转) -> A^T; 单位阵 -> I (解析对拍)
@@ -8,7 +8,7 @@
 //   ⑤ Inverse(A, hint) 与 Inverse(A) 一致 (hint 只跳过探测, 不改结果)
 //   ⑥ 异常: 奇异 / 非方阵 / 0x0
 //   ⑦ SPD 档 (S2a-2): Classify 分出 SymmetricPositiveDefinite 走 cholesky_inverse,
-//      与 LU 路径对拍 + 正定性判据 (matrix.md §3.2)
+//      与 LU 路径对拍 + 正定性判据 (结构探测口径)
 //   ⑧ qr_inverse (S-App6, 2026-10-16): A = Q·R ⇒ A⁻¹ = R⁻¹·Qᴴ (对上三角 R 回代);
 //      残差 + 与 lu_inverse 逐元一致 + 奇异/非方阵/空矩阵 throw; double 与 Complex 各一遍
 //
@@ -164,7 +164,7 @@ int main()
         // 这里不再断言它 throw (那是它未实现时的临时口径)。
     }
 
-    // ---- G. SPD 档 (S2a-2: cholesky 接入; matrix.md §3.2 "SPD 检测 = Cholesky 不选主元能否走通") ----
+    // ---- G. SPD 档 (S2a-2: cholesky 接入; 结构探测口径 "SPD 检测 = Cholesky 不选主元能否走通") ----
     std::printf("\n[G] SPD 档 (S2a-2)\n");
     {
         const double tol2 = DefaultTol<D>(2);

@@ -1,6 +1,6 @@
 // eigen.cpp -- linalg/eigen.hpp 验收 (S3: cyclic Jacobi 迭代 / V1.3 硬判据)
 //
-// 判据 (matrix.md §10.9 第 2 条: 判据先行):
+// 判据清单 (判据先行: 先写「多少算对」再写实现):
 //   ① V1.3 硬指标: 对称阵重构 max|A − Q·Λ·Q^H| < 1e-8; Hermitian 复矩阵过同一份源码
 //   ② 特征向量定义: 逐列 A·q_j = λ_j·q_j
 //   ③ Q 正交/酉: ‖Q^H·Q − I‖∞ < 1e-12

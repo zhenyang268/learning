@@ -1,9 +1,9 @@
 // dual_complex.cpp -- V1.5 验收: linalg × autodiff 交叉 (Dual<Complex<double>>)
 //
-// V1.5 原文 (plan.md 阶段 1):
+// V1.5 原文 :
 //   `Dual<Complex<double>>` 作为 Matrix 元素编译通过, 2x2 复矩阵 LU 的 value
 //   与直接用 `Complex<double>` 计算一致 (为波包演化铺路)。
-//   配套用例 (matrix.md §7.2 复数求导图景):
+//   配套用例 (Complex 上的求导图景):
 //     z^2 单种子(全纯) / |z|^2 双种子(非全纯);
 //     阈值: value 一致 1e-12, derive 一致 1e-10 (double)。
 //

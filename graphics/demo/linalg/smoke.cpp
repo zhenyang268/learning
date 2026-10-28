@@ -1,6 +1,6 @@
 // smoke.cpp -- V1.1 显式闸门 (S6 收口第 ① 项)
 //
-// plan.md V1.1 原文:
+// 
 //   Matrix<double> 与 Matrix<Complex<double>> 使用**同一份** linalg 源码
 //   零修改编译通过 (traits 设计正确性的硬验收)。
 //

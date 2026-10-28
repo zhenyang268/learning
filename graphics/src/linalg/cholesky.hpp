@@ -5,29 +5,77 @@
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
 
-/**
- * cholesky 分解 (Hermitian 正定): A = L * L^H, L 为下三角, 对角元为正实数
- *
- * 元素公式 (matrix.md 3.1; plan.md V2.2):
- *     d      = A(j,j) - sum_{k<j} L(j,k) * conj(L(j,k))            <- 实数
- *     L(j,j) = sqrt(d)
- *     L(i,j) = ( A(i,j) - sum_{k<j} L(i,k) * conj(L(j,k)) ) / L(j,j)    (i > j)
- *
- * 与 LU (solve.hpp) 的分工: LU 通用但必须选主元; 这里只吃正定矩阵, 换来
- *   1. 不选主元 —— 正定性保证每个主元严格为正, 于是没有换行, 也就没有
- *      "乘子要跟着换行"那类簿记 (S1 在 LU 里修掉的 bug 在这里不存在)
- *   2. flops 约一半 (n^3/3 vs LU 的 2n^3/3)
- *   3. L 唯一 (对角元取正号), 对拍干净
- *
- * 存在性定理: A 正定 <=> Cholesky 走通。所以本文件同时是 SPD 的判据 ——
- * inverse.hpp 的 is_positive_definite 直接调它 (matrix.md 3.2)。
- *
- * D7 : 共轭一律走 conj, 不把 x*x 当模方 (复数下必须 conj)
- * D12: 非方阵 / 空 / 非正定 -> throw, 不拿空矩阵当错误码
- *
- * @param A Hermitian 正定方阵 (Hermitian 由调用方保证; 本函数只读下三角)
- * @return L, 满足 A = L * L^H
- */
+// ===========================================================================
+// linalg/cholesky.hpp —— Cholesky 分解 A = L·L^H
+// ===========================================================================
+//
+// 【状态】已实现。
+//
+// ---------------------------------------------------------------------------
+// 一、API 契约
+// ---------------------------------------------------------------------------
+//   template <CommutativeScalar T>
+//   Matrix<T> cholesky(const Matrix<T>& A)                      // 返回 L
+//   template <CommutativeScalar T>
+//   Matrix<T> cholesky_solve(const Matrix<T>& A, Matrix<T> B)   // 返回 x
+//
+// 形状: A 必须 n×n 方阵且 **Hermitian 正定** (n >= 1)。
+//   · 非方阵 / 空矩阵                        -> throw std::invalid_argument
+//   · 非正定 (主元实部 <= DefaultTol<T>(n))  -> throw std::runtime_error
+//   · cholesky_solve: B.Rows() != n          -> throw std::invalid_argument
+// 返回: L 为 n×n **下三角**, 对角元取正号 (唯一)。A = L·L^H。
+//
+// ⚠ 异常类型口径不统一 (历史遗留): 「非正定」抛的是 `std::runtime_error`,
+//   而 `similar` 的其它入口 (expm / FromAxisAngle) 用的是 `domain_error`。
+//   两者语义上都算"输入不在定义域", **是 runtime_error 用错了**。
+//   改它会动到已有用例的 catch 分支, 故此处**如实记录不改**, 新代码请用
+//   `domain_error` (见 numeric-contract.md §5 三分)。
+//
+// 前置条件: Hermitian **由调用方保证** —— 本函数只读下三角, 不检查
+//   A(i,j) == conj(A(j,i))。传一个非 Hermitian 矩阵进来不会报错,
+//   只会得到"下三角部分定义的"那个矩阵的分解。
+//
+// 不变量:
+//   · L(j,j) > 0 对所有 j (正定性的直接结果)。
+//   · L 唯一 —— 因为对角元被钉成正号。这一点让对拍非常干净。
+//
+// 域: CommutativeScalar (Dual 可用 —— 见末尾 conduit 说明)。
+//
+// ---------------------------------------------------------------------------
+// 二、调用顺序 / 内部机制
+// ---------------------------------------------------------------------------
+//   · 自上而下按列推进, 不选主元。**不选主元是正确性的关键**: 正定性保证
+//     每个主元严格为正, 于是不存在"需要换行"的情形; 一旦真的需要换,
+//     说明矩阵不是正定, 这时候该报错, 而不是救它。
+//   · 容差与 solve.hpp 同一口径: 主元实部 <= DefaultTol<T>(n) 判非正定。
+//   · 复数域一律写 `L(j,k) * conj(L(j,k))` 而**不用** abs2 —— 原因见末尾。
+//
+// ---------------------------------------------------------------------------
+// 三、数学推导 / 踩坑
+// ---------------------------------------------------------------------------
+// 【元素公式】
+//     d      = A(j,j) - sum_{k<j} L(j,k)·conj(L(j,k))          ← 实数
+//     L(j,j) = sqrt(d)
+//     L(i,j) = ( A(i,j) - sum_{k<j} L(i,k)·conj(L(j,k)) ) / L(j,j)      (i > j)
+//
+// 【为什么它比 LU 便宜】
+//   1. 不选主元 —— 没有换行, 也就没有"乘子要跟着换行搬"那类簿记
+//      (LU 侧修过的 bug 在这里根本不存在)。
+//   2. flops 约一半: n³/3 vs LU 的 2n³/3。
+//   3. L 唯一 (对角元取正号), 对拍干净。
+//
+// 【存在性定理: A 正定 ⟺ Cholesky 走通】
+//   所以本函数同时是 **SPD 的判据** —— inverse.hpp 的 is_positive_definite
+//   直接调它, 不另写一个特征值判据。这是"用算法本身当判据"的少数正当场合:
+//   因为等价性是双向的 (不是"能用它近似判断")。
+//
+// 【为什么写 L(j,k)*conj(L(j,k)) 而不是 abs2 —— 踩点】
+//   `ScalarTraits<Dual<T>>::abs2` 只看 value 槽, **会丢掉 epsilon 分量**;
+//   而 `conj` 对 Dual 是逐分量的, 于是 Dual 矩阵也能正确传播导数。
+//   ⇒ 凡是**要传播导数**的地方, 用 x*conj(x) 而不是 abs2;
+//     凡是**纯数值判据** (比主元、判收敛), 才用 abs2。
+//   这两者容易混 —— 判据用 abs2、传播用 conj, 分工见 numeric-contract.md D7。
+// ===========================================================================
 
 template <CommutativeScalar T>
 Matrix<T> cholesky(const Matrix<T>& A)
