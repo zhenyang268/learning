@@ -46,12 +46,12 @@
 | 2 | `tensor` | 24 | `core/tensor.hpp` | **占位**（`[P1]`–`[P24]` 全为「断言仍 throw」） |
 | 3 | `compute_graph` | 36 | `autodiff/grad_graph.hpp` | **权威**（含三方对拍） |
 | 4 | `apply` | 18 | `autodiff/jacobian.hpp` 的 `Apply` | 权威 |
-| 5 | `backward` | 31 | `autodiff/grad_graph.hpp` 反向 | **权威**（最小闭环三方对拍） |
+| 5 | `backward` | 31（迁移后 35） | `autodiff/grad_graph.hpp` 反向 | **权威**（最小闭环三方对拍；[E] 段按精确类型拆条） |
 | 6 | `jacobian` | 18 | `autodiff/jacobian.hpp` | 权威 |
 | 7 | `solve` | 34 | `linalg/solve.hpp` | **权威** |
 | 8 | `inverse` | 85 | `linalg/inverse.hpp` | **权威** |
 | 9 | `cholesky` | 98 | `linalg/cholesky.hpp` | **权威** |
-| 10 | `eigen` | 119 | `linalg/eigen.hpp` | **权威** |
+| 10 | `eigen` | 119（迁移后 124） | `linalg/eigen.hpp` | **权威**（λ 成对断言拆成两行） |
 | 11 | `svd` | 266 | `linalg/svd.hpp` | **权威**（判据最多） |
 | 12 | `qr` | 189 | `linalg/qr.hpp` | **权威**（三个分解各一遍） |
 | 13 | `dual_complex` | 22 | `linalg` × `autodiff` 交叉 | 权威 |
