@@ -267,11 +267,17 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
   （如 `~/develop/learning/learning-todo/`）；**改动须在各自仓内提交**。
 - **LaTeX 必须走 xelatex**：`latexmk -pdfxe`。若用 `-pdf`（走 pdfLaTeX），ctex 会报
   `fontset 'mac' unavailable` 并**卡在交互输入**等键盘，命令永远不返回（2026-09-24 实测）。
-- **git 写操作会被沙箱拒绝**：`commit` / `update-index` / `branch -D` / `worktree remove` 都可能报
+- **git 危险操作已于 2026-10-30 被无条件允许** ⇒ **沙箱不再拦，命令会真的执行**。
+  风险位置因此翻转：从「命令被拒」变成「命令成功且不可逆」。
+  **破坏性命令（`reset --hard` / `clean` / `checkout .` / `push --force` / `branch -D` / `stash clear`）
+  执行前必读 `docs/env-git.md` §三**：分级禁令、四步仪式、reflog 救不了什么。
+  两条最容易出事的：**`git clean -fdx` 会删掉 6 个独立子仓 + `third_party/`**；
+  **`git add -A` 在多 agent 并行时会截胡别人的改动**。
+- **（备用）git 写操作偶发被拒**：`commit` / `update-index` / `branch -D` / `worktree remove` 报
   `unable to unlink .../.git/index.lock: Operation not permitted`，并级联出
   `Another git process seems to be running`（看着像随机失败，其实是前一次失败的回声）。
   **处理**：用 shell `rm -f` 删掉**具体那一个**锁文件 → **立刻重跑**，循环 3–8 次基本必过。
-  细节（成因、锁文件清单、worktree 补法）→ `docs/env-git.md`；skill `gitsandbox-write-workaround`。
+  细节（成因、锁文件清单、worktree 补法）→ `docs/env-git.md` §二；skill `gitsandbox-write-workaround`。
 - 全仓递归 `grep` / `ls -R` 容易被沙箱拒绝 → 改用结构化的文件检索工具。
 - **`git add -A` 会带进不该进的东西**：`graphics/.cache/`（clangd 索引）、`__pycache__`、
   临时残留（如 `README.mdXXXXXX` 这种「主名 + 随机 6 字符」的原子写入残留）。暂存后必看 `git status`。
@@ -319,6 +325,23 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 
 - **未经明确要求不要 `git push`**；在工作区内可以正常 `git add` / `git commit`。
 - 提交信息用中文短句，说明**做了什么**，而不是罗列改了哪些文件。
+
+**危险操作的自我审查（2026-10-30 用户无条件允许后新增，替代消失的沙箱闸门）**
+
+> 全文与事故档案 → `docs/env-git.md` §三。这里只放**每次提交都要过一遍**的四条。
+
+1. **机械允许 ≠ 被授权。** 判据只有一条：用户在这个会话里有没有要我做这件事。没要就不做。
+2. **一律按路径 `git add <file>`，禁止 `git add -A` / `git add .`。**
+   多 agent 并行时那会截胡别人的改动；也会把意外内容带进索引。
+   加完先 `git status --short` 复核一遍再 commit。
+3. **`git clean` 永远不加 `-x`。** 本仓 `.gitignore` 里登记了 6 个独立子仓
+   （`learning-todo/`、`learning-viz/`、`learning-web/`、`learning-benchmark/`、
+   `11408-notebook/`、`learning-408/`）+ `graphics/third_party/` + `.venv/`，
+   `-x` 会把它们连同各自的历史一起删掉，父仓无法恢复。
+4. **任何会丢工作区改动的操作**（`reset --hard` / `checkout .` / `restore .` / `stash drop`）：
+   先 `git status --short` 看现场 → `git branch backup/pre-op-$(date +%H%M%S)` 建零成本快照 →
+   **在会话里写出「我要执行 X，会丢失 Y」** → 才执行。
+   **`reflog` 救不了未提交的改动**，别拿它当兜底。
 
 ---
 

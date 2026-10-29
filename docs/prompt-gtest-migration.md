@@ -132,6 +132,23 @@
 提交信息用中文短句说明**做了什么**，例如：
 `迁移 linalg/cholesky 到 gtest（98 条断言保留，注入 SPD 档漏判已验）`
 
+## git 纪律（2026-10-30 起沙箱不再拦截危险命令，必须自律）
+
+> 详细禁令与事故档案 → `/Users/apple/develop/learning/docs/env-git.md` §三。
+
+1. **一律 `git add <具体路径>`，禁止 `git add -A` / `git add .`。**
+   同一个仓里可能有别的 agent 在改别的文件，一次 `-A` 就会把它半途的改动一起提交。
+2. **提交前 `git status --short` 复核。看到不认识的改动就停下报告**，不要擅自提交它。
+3. **每个文件一个提交**，提交信息用中文短句说明做了什么。
+4. **`git clean` 永远不加 `-x`。** 父仓 `.gitignore` 里登记了 6 个独立子仓
+   （`learning-todo/`、`learning-viz/`、`learning-web/`、`learning-benchmark/`、
+   `11408-notebook/`、`learning-408/`）+ `graphics/third_party/` + `.venv/`，
+   `-x` 会把它们连同各自的历史一起删掉，父仓无法恢复。
+5. **还原注入只准按文件**：`git checkout -- graphics/src/<具体文件>`。
+   **禁止** `git checkout .` / `git restore .` / `git reset --hard` ——
+   那会把你自己的未提交改动一起冲掉，而 **`reflog` 救不了未提交的改动**。
+6. **不要 `git push`。**
+
 ## 明确不要做的事
 
 - 不要顺手「优化」判据：不合并、不减少迭代次数、不把 `1e-6` 调成 `1e-5`。
