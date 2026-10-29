@@ -18,24 +18,17 @@
 ## 快速开始
 
 ```bash
-# 1. Python 环境（uv 管理，Python 3.14）
-uv sync
-
-# 2. 构建 C++ 引擎与 demo，跑测试
-cmake -S graphics -B graphics/build -DCMAKE_BUILD_TYPE=Debug
-cmake --build graphics/build -j
-ctest --test-dir graphics/build --output-on-failure
-# 或一键：./graphics/run_tests.sh    （-d 明细 / -c 从零 / -w 开 -Wall -Wextra）
-
-# 3. 编译数学笔记（产出 math-notebook/main.pdf）
-cd math-notebook && latexmk -pdfxe -interaction=nonstopmode main.tex && cd ..
+uv sync                 # Python 依赖
+./graphics/run_tests.sh # C++ 构建 + ctest 一键（-d 明细 / -c 从零 / -w 全告警）
 ```
 
-> ⚠️ **笔记必须用 `-pdfxe`（xelatex）。** 用 `-pdf`（pdfLaTeX）时 ctex 会报
-> `fontset 'mac' unavailable` 并**卡在交互输入等键盘，命令永远不返回**（2026-09-24 实测）。
-> 目录是 `math-notebook/`，**不是** `notebook/`。
+> **完整命令表在 `AGENTS.md` §三**（含 `cmake` 分步、`latexmk` 引擎坑、图表命令）—— 本文不重复。
 
-> 注意：**四个子仓（`learning-todo/`、`learning-viz/`、`learning-web/`、`learning-408/`）
+> ⚠️ 只有一条必须在这里强调：**笔记编译必须用 `-pdfxe`（xelatex）**。
+> 用 `-pdf`（pdfLaTeX）时 ctex 会报 `fontset 'mac' unavailable` 并**卡在交互输入
+> 等键盘，命令永远不返回**（2026-09-24 实测）。目录是 `math-notebook/`，**不是** `notebook/`。
+
+> **四个子仓（`learning-todo/`、`learning-viz/`、`learning-web/`、`learning-408/`）
 > 不在本仓跟踪范围内**（无 `.gitmodules`、无 gitlink），新 clone 或 `git worktree` 里都不会出现。
 > 绝对路径通常是 `~/develop/learning/<仓名>/`，**必须按绝对路径访问，改动在各自仓内提交**。
 
@@ -137,16 +130,18 @@ learning/                        viz/                        web/
 
 ## 文档导航
 
-| 文件 | 一句话 |
-|---|---|
+> **完整的文档地图（含"什么时候读、真源在哪"）在 `AGENTS.md` §一** —— 本文只给
+> 一张按问题分的速查表，不重复逐文件描述。
+
 ### 按「我要回答什么问题」找文档
 
 > 不要按文件名猜。先找你的问题在哪一组。
 
 **① 每次会话开场（必读）**
 
-| 文件 | 内容 |
+| 文件 | 回答什么 |
 |---|---|
+| **`docs/agent-context.md`** | **单文件上下文包** —— 新会话/换工具/换机器时贴这一份就够（身份 + 规则 + 表达 + 本机坑 + 真源地图）。**不复制技术细节，只给指针** |
 | `NOW.md` | **近期要做什么**（唯一滚动文件，1–3 周一版，过期整篇重写） |
 | `dev-progress.md` | **进度总览**：§0 现状表 + §2 Gate + §5 里程碑（**不含日志正文**） |
 | `AGENTS.md` | **协作规约**：文档三分类（防腐化条款）、命令、代号速查、硬规则、环境坑 |
@@ -187,13 +182,7 @@ learning/                        viz/                        web/
 | `docs/logs/<YYYY-MM>.md` | **进度日志**（按月一个文件，append-only，最新在上） |
 | `graphics/demo/pyapps/tensor-convention.md` | pyapps 层张量记号约定 |
 
-> **已删除（2026-10-26 / 10-28）**，内容均已迁走，**不要按旧路径找**：
->
-> | 已删 | 内容去向 |
-> |---|---|
-> | `docs/matrix.md`（1197 行） | 红线 → `graphics/acceptance.md` §0；**数值契约 → `graphics/numeric-contract.md`**；张量契约 → `tensor.hpp` 头注释 |
-> | `graphics/plan.md` | 红线 → `acceptance.md` §0；阶段计划本身**已退役**（腐化成过期文档） |
-> | `docs/interview-depth.md` | **并入 `docs/interview-map.md` §5（面试深度 6 问）/ §6（不做）** |
-> | `learning-todo/{math-plan,fan-plan,lie-plan,stage1-wrapup}.md` | 数学路线 → `docs/route-math.md`；其余为已退役的计划 |
->
+> **已删除文件的去向表**（`matrix.md` / `plan.md` / `interview-depth.md` / 四个 `*-plan.md`）
+> **只在 `AGENTS.md` §一「已删除」那张表里维护**，本文不重复。要点只有两条：
+> `docs/matrix.md` 的数值契约 → `graphics/numeric-contract.md`；
 > `docs/logs/` 里的历史条目仍按旧路径引用，**属历史记录，不修**。

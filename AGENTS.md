@@ -9,6 +9,7 @@
 
 | 文件 | 内容 | 什么时候读 |
 |---|---|---|
+| `docs/agent-context.md` | **单文件上下文包**（身份 / 行为规则 / 表达约定 / 本机坑 / 真源地图 / 换工具步骤）。**只聚合跨会话必需项，不复制技术细节** | **新会话开场、换工具、换机器**；或想一次性看懂"这个 agent 该怎么工作" |
 | `NOW.md` | **近期要做什么**（全仓唯一滚动文件，1–3 周一版，过期整篇重写） | **每次会话开始时** |
 | `dev-progress.md` | **进度总览**（§0 现状表 + §2 Gate + §5 里程碑）。**不含日志正文** | 每次会话开始时 |
 | `docs/logs/<YYYY-MM>.md` | **进度日志**（按月一个文件，append-only，最新在上） | 想知道"哪天做过什么"时，按月份查 |
@@ -268,8 +269,8 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 - `graphics/`：C++ 图形/线代引擎（`src/` 头文件库；`demo/<模块>/` 为 ctest 验收用例，
   一键入口 `run_tests.sh`；`demo/apps/` 为**附加区**——现象演示，不注册 ctest，用 `run_apps.sh` 跑；
   `test/` 是早期 C 实验与 notebook，与 ctest 无关）
-- `learning-todo/`：生成产物与参考文档（`chats/`、`imgs/`、`ns-progress.md`（数学日志）、
-  `route-math.md`（数学地图）、`interview-depth.md`、`*_plan.md` 退役跳转页）
+- `learning-todo/`：**产物存档仓**（独立 git 仓，父仓不跟踪）。实际只有 `README.md` + `imgs/`
+  （图 59 MB）。**文档不放这里** —— 2026-10-26 已全部搬回父仓 `docs/`；数学日志 → `docs/math-log.md`。
 - `learning-viz/`：职责**收窄为计算/生成层**（Flask `/api/viz/*` + ImGui/matplotlib 本地渲染）；
   **不再承担笔记转换**（`notes_pipeline` 已移出）
 - `learning-web/`：笔记 web 化的全部落地：`build/`（转换，Python）+ `graph/`（语义边真源）
