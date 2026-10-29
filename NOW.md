@@ -86,15 +86,24 @@
 - **做什么**（四入口）：
   1. 朴素 `DFT`（O(N^2)，**只作对照基线**，不做优化）
   2. `FFT`（radix-2，迭代式位反转）
-  3. `Convolve` —— 时域直接算 + 频域乘法**两条路径**（补零到 >= N+M-1）
+  3. `Convolve` —— **三条路径**：时域直接算 / 频域乘法（补零到 >= N+M-1）/
+     **循环矩阵乘**（复用 `linalg`，这是唯一跨模块的独立路径，比 DFT 对拍 FFT 强得多）
   4. 傅里叶级数：`FourierCoefficients`（系数投影）+ `Reconstruct`（截断重构）
+- **共享原语（不许各写一份）**：逐点复乘 + 归约求和。`Convolve` = 逐点乘后接逆变换；
+  Parseval / 内积 = 逐点乘后接归约。**内积不在本文件实现**（`linalg` 的 `Dot`/`Adjoint` 已覆盖），
+  只复用 —— 同一算术只准一处实现。
 - **算做完**：N = 1024 下 FFT vs 朴素 DFT **复数逐点**相对误差 <= 1e-12；
-  卷积两条路径逐点一致 + Parseval 能量守恒 <= 1e-12；
+  卷积**三条路径**逐点一致 + Parseval（**带 `1/N`**）<= 1e-12；
   方波重构的 Gibbs 过冲约 8.95% 且**不随 N 减小**（只向跳变点收缩）；
   N = 2^20 的计时比报出 O(N log N) vs O(N^2) 的量级差。
 - **不做**：任意长度（混合基 / Bluestein）、多维 FFT、实数 rfft、窗函数、频谱估计。
 - **注意**：必须能吃 `Complex<T>`（库已有 `core/complex.hpp`）；实数 `T` 域也要能编过。
   阈值均为**初判据，实现后按实测收紧**。
+- **符号与归一化已定案**：`graphics/numeric-contract.md` §11（**D20**）。
+  归一化跟 `numpy.fft`（正向不归一化、逆带 `1/N`），**不选酉变换**；
+  高斯不动点用 `exp(-pi*x^2)`，其阈值必须实测后填（连续恒等式，离散只是近似）。
+- **卷积不进 `Einsum`**：它带平移核，不是纯下标收缩；要进得先 Toeplitz 展开成 N×N，
+  那是另一个东西。这条也补上了「einsum 薄层无消费者」的理由。
 
 ---
 
@@ -112,8 +121,15 @@
   `Phi(NormalQuantile(p)) - p` <= 1e-12（p 取 [1e-9, 1-1e-9]）；
   N = 10^6 的样本均值/方差偏差落在 3/sqrt(N) 量级内。
 - **不做**：多元正态、Cholesky 相关采样、拒绝采样族、KS 检验（只做矩对照）。
-- **落点待定**：erf / ppf 是纯函数，可另立 `math/special.hpp`；Box–Muller 按
-  `docs/route-math.md` 归 `math/mc.hpp`。边界见「待你确认」第 2 条。
+- **落点已定（2026-10-30）**：按「**复值 vs 实值**」切，不按主题切 ——
+  `math/special.hpp` 放 `Erf`/`Erfc`/`NormalCdf`/`NormalQuantile`（**实值纯函数**，
+  不许依赖 `Complex`）；`math/prob.hpp` 放**正态特征函数** `phi_X(t)` 与 `BoxMuller` 采样
+  （复值，属傅里叶域，符号见 D20）。
+- **不依赖 `autodiff`**（2026-10-30 定）：矩的交叉验证 `phi^{(k)}(0) = i^k * E[X^k]`
+  **放在 testcase 里**做 —— 用例同时 include `autodiff/dual.hpp` 与 `prob.hpp`，
+  用 `Dual` 求 `phi` 在 0 点的导数，与解析矩对拍。**库际零依赖，验证力一点不减。**
+- **跨文件三角判据**：两个高斯密度的 `Convolve` 结果，与 `phi_X * phi_Y` 的逆变换对拍 ——
+  同时压 `fourier` 与 `prob` 两侧，任一边符号错都会红。这也是「一份时间喂两条线」的落点。
 
 ---
 
@@ -199,9 +215,11 @@
    只记三列 ——「学历要求 / 是否明写稀疏·预条件·MPI·GMRES·BRDF·BVH / 是否要求专业对口」。
    **这是市场事实，agent 判断替代不了。**
 
-2. **本期四个契约空白**（未定前对应条目不开工；论述在各条目内，这里只做清单）：
+2. **本期还剩三个契约空白**（未定前对应条目不开工；论述在该条目内，这里只做清单）：
    - `Tensor` 三个待定：`strides_` 单一真源 / 广播是否进 `operator+` / 内联容量 4 —— 见「张量」条
-   - erf / ppf 的落点：另立 `math/special.hpp` 还是并进 `math/mc.hpp` —— 见「erf / 正态分布」条
+
+   > 已于 2026-10-30 结清：erf / ppf 落点（`special.hpp` + `prob.hpp`）、
+   > 傅里叶符号与归一化（`numeric-contract.md` D20）、`prob.hpp` 是否依赖 `autodiff`（不依赖）。
 
 ---
 
