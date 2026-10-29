@@ -9,3 +9,15 @@ dependencies = [
     "numpy>=2.5.3",
     "sympy>=1.14.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+# 限死扫描范围: 不限的话 pytest 会去全仓找 test_*.py, 包括 math-notebook 下
+# 的 ipynb 与各子仓, 又慢又会误报。
+testpaths = ["graphics/demo/pyapps/tests"]
+# 断言里带浮点比较时, 失败信息里保留完整 diff
+addopts = "-ra"

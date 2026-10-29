@@ -11,6 +11,9 @@
 #   ./run_tests.sh -l           只列出已注册用例, 不构建不跑
 #   ./run_tests.sh --build-only 只配置 + 构建, 不跑测试
 #   ./run_tests.sh --test-only  只跑测试, 不重新配置/构建 (需先构建过)
+#   ./run_tests.sh --coverage   带覆盖率构建并跑测试, 出 gcovr 报告
+#                               (默认构建目录换成 build-cov, 不污染日常构建;
+#                                分母只算 src/, 见 demo/README.md §5)
 #   ./run_tests.sh -h           帮助
 #
 # 退出码: 0 全绿 | 1 配置/构建失败 | 2 有用例失败 | 64 参数错误
@@ -28,6 +31,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 JOBS="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)"
 CLEAN=0; DETAIL=0; WARN=0; LIST_ONLY=0; BUILD_ONLY=0; TEST_ONLY=0
+COVERAGE=0; BUILD_DIR_GIVEN=0
 
 if [ -t 1 ]; then
     C_STEP=$'\033[1;34m'; C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_OFF=$'\033[0m'
@@ -55,15 +59,26 @@ while [ $# -gt 0 ]; do
         -l|--list)      LIST_ONLY=1 ;;
         --build-only)   BUILD_ONLY=1 ;;
         --test-only)    TEST_ONLY=1 ;;
+        --coverage)     COVERAGE=1 ;;
         -j)             [ $# -ge 2 ] || { err "-j 需要参数 (并行度)"; exit 64; }; JOBS="$2"; shift ;;
         -j*)            JOBS="${1#-j}" ;;
-        -b|--build-dir) [ $# -ge 2 ] || { err "-b 需要参数 (构建目录)"; exit 64; }; BUILD_DIR="$2"; shift ;;
-        -b*)            BUILD_DIR="${1#-b}" ;;
+        -b|--build-dir) [ $# -ge 2 ] || { err "-b 需要参数 (构建目录)"; exit 64; }; BUILD_DIR_GIVEN=1; BUILD_DIR="$2"; shift ;;
+        -b*)            BUILD_DIR_GIVEN=1; BUILD_DIR="${1#-b}" ;;
         -h|--help)      usage; exit 0 ;;
         *)              err "未知参数: $1"; echo; usage; exit 64 ;;
     esac
     shift
 done
+
+# --coverage 默认用独立构建目录: 插桩 + -O0 会污染日常构建的 .o
+if [ "$COVERAGE" = 1 ] && [ "$BUILD_DIR_GIVEN" = 0 ]; then
+    BUILD_DIR="$SCRIPT_DIR/build-cov"
+    # 并且**默认从零重建**。.gcda 会跨次累积; 一旦被测代码或框架变过,
+    # 复用旧目录会给出失真数字 —— 2026-10-30 实测: 框架迁移后
+    # src/quat/quaternion.hpp 的覆盖率从 96% 「掉」成 5%, 数字是假的。
+    # 想增量跑覆盖率就显式给 -b <dir>, 那种情况由你自己负责口径。
+    CLEAN=1
+fi
 
 # 构建目录规范化为绝对路径 (相对路径按当前 cwd 解释)
 case "$BUILD_DIR" in
@@ -107,9 +122,17 @@ fi
 if [ "$TEST_ONLY" = 0 ]; then
 
 # --- 2) 配置 ---------------------------------------------------------------
+EXTRA_CXX_FLAGS=""
+if [ "$WARN" = 1 ]; then EXTRA_CXX_FLAGS="$EXTRA_CXX_FLAGS -Wall -Wextra"; fi
+# -O0 -fno-inline: 让行号归属尽量贴近源码, 否则内联会把判据行算到别的行上
+if [ "$COVERAGE" = 1 ]; then EXTRA_CXX_FLAGS="$EXTRA_CXX_FLAGS -O0 -g --coverage -fno-inline"; fi
+
 CMAKE_ARGS=(-S "$SCRIPT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug)
-if [ "$WARN" = 1 ]; then
-    CMAKE_ARGS+=(-DCMAKE_CXX_FLAGS="-Wall -Wextra")
+if [ -n "$EXTRA_CXX_FLAGS" ]; then
+    CMAKE_ARGS+=(-DCMAKE_CXX_FLAGS="${EXTRA_CXX_FLAGS# }")
+fi
+if [ "$COVERAGE" = 1 ]; then
+    CMAKE_ARGS+=(-DCMAKE_EXE_LINKER_FLAGS="--coverage")
 fi
 
 step "配置 (cmake ${CMAKE_ARGS[*]})"
@@ -138,9 +161,41 @@ if [ "$BUILD_ONLY" = 1 ]; then
 fi
 
 # --- 4) 测试 ---------------------------------------------------------------
+rc_cov=0
 step "测试 (ctest --output-on-failure)"
 ctest --test-dir "$BUILD_DIR" --output-on-failure
 rc_test=$?
+
+# --- 4.5) 覆盖率 (可选) ----------------------------------------------------
+# 口径: 分母只算 src/。demo/ 是判据本身, 算进去会把"测试写了多少行"当成覆盖率。
+# **不要把这个百分比当质量指标**: 模板未实例化的分支天然是 0%,
+# 正确用法是看 demo/README.md §5 的「未解释行」——每一行未覆盖必须能说出理由。
+if [ "$COVERAGE" = 1 ]; then
+    step "覆盖率 (gcovr; 分母只算 src/)"
+    GCOVR_BIN="$(command -v gcovr || true)"
+    if [ -z "$GCOVR_BIN" ] && [ -x "$HOME/.local/bin/gcovr" ]; then
+        GCOVR_BIN="$HOME/.local/bin/gcovr"
+    fi
+    if [ -z "$GCOVR_BIN" ]; then
+        err "找不到 gcovr。先跑 ./graphics/scripts/fetch_deps.sh"
+        exit 1
+    fi
+
+    mkdir -p "$BUILD_DIR/coverage"
+    if ( cd "$BUILD_DIR" && "$GCOVR_BIN" \
+            --root "$SCRIPT_DIR" \
+            --filter "$SCRIPT_DIR/src/" \
+            --exclude-unreachable-branches \
+            --txt --txt-metric line \
+            --print-summary \
+            --html-details "coverage/index.html" ); then
+        ok "覆盖率报告: $BUILD_DIR/coverage/index.html"
+    else
+        err "gcovr 失败 —— 常见原因: AppleClang 的 .gcda 与 gcov 不兼容。"
+        err "排查: cd $BUILD_DIR && gcovr --root $SCRIPT_DIR --filter $SCRIPT_DIR/src/ -v"
+        rc_cov=1
+    fi
+fi
 
 # --- 5) 明细 (可选) --------------------------------------------------------
 if [ "$DETAIL" = 1 ]; then
@@ -148,19 +203,36 @@ if [ "$DETAIL" = 1 ]; then
     while IFS= read -r exe; do
         [ -n "$exe" ] && [ -x "$exe" ] || continue
         out="$("$exe" 2>&1)"; rc=$?
-        n_ok="$(printf '%s\n' "$out" | grep -c '\[OK\]')"
-        n_bad="$(printf '%s\n' "$out" | grep -c '\[FAIL\]')"
-        printf '  %-16s rc=%d  检查 %s 项 (FAIL %s)  %s\n' \
-            "$(basename "$exe")" "$rc" "$n_ok" "$n_bad" \
+        # 两套框架的输出格式不同, 两个都要认:
+        #   老用例(Checker):  "  [OK]   xxx" / "  [FAIL] xxx"
+        #   gtest:            "[       OK ] Suite.Test (0 ms)" / "[  FAILED  ] Suite.Test"
+        # 只写 '\[OK\]' 会让 gtest 用例恒为 0 项 —— 静默失效, 且看起来"跑过了"。
+        n_ok="$(printf '%s\n' "$out" | grep -cE '\[[[:space:]]*OK[[:space:]]*\]')"
+        n_bad="$(printf '%s\n' "$out" | grep -cE '\[[[:space:]]*(FAIL|FAILED)[[:space:]]*\]')"
+        # 两套框架数的东西**不是一回事**, 不能混在一列:
+        #   老 Checker  : 每行 [OK] 是一条断言  -> 数的是「断言数」
+        #   gtest       : 每级 [       OK ] 是一个 TEST() -> 数的是「用例数」
+        # 拿 gtest 的用例数去和老的断言数比较会得出「迁移后判据变少了」的错误结论。
+        if printf '%s\n' "$out" | grep -qE '^\[==========\]'; then
+            metric="用例 ${n_ok} 个 (FAIL ${n_bad})"
+        else
+            metric="断言 ${n_ok} 项 (FAIL ${n_bad})"
+        fi
+        printf '  %-16s rc=%d  %-26s %s\n' \
+            "$(basename "$exe")" "$rc" "$metric" \
             "$(printf '%s\n' "$out" | tail -1)"
     done < <(ctest --test-dir "$BUILD_DIR" -N -V 2>/dev/null | sed -n 's/^.*Test command: //p')
 fi
 
 # --- 6) 汇总 ---------------------------------------------------------------
-if [ "$rc_test" -eq 0 ]; then
-    ok "全部用例通过"
-    exit 0
-else
+# 覆盖率失败也必须反映到退出码 —— 否则"要求了覆盖率却没生成"会被当成绿。
+if [ "$rc_test" -ne 0 ]; then
     err "有用例失败 (ctest exit=$rc_test)"
     exit 2
 fi
+if [ "$rc_cov" -ne 0 ]; then
+    err "用例通过, 但覆盖率报告未生成 (见上面的排查提示)"
+    exit 1
+fi
+ok "全部用例通过"
+exit 0
