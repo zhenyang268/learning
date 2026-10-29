@@ -156,7 +156,7 @@ Matrix<Dual<T>> LocalDeriv(const Matrix<Dual<T>>& A, FunctionType f) {
   `[       OK ] Suite.Test`（**带空格填充**）—— `grep -c '\[OK\]'` 对它们恒为 0，
   且不报错。`run_tests.sh -d` 已改成同时匹配两种格式；**自己写统计脚本时必须照抄那个正则**。
 
-## 十二、工具链与脚本的三个新坑（2026-10-30，写依赖脚本与覆盖率时踩的）
+## 十二、工具链与脚本的坑（2026-10-30，写依赖脚本与覆盖率时踩的；标题原写「三个」，实际见下）
 
 - **`$VAR` 紧跟全角标点会把标点吞进变量名**。`step "依赖（$THIRD_PARTY）"` 里
   bash 把 `THIRD_PARTY` + `）` 当成一个变量名 ⇒ `unbound variable`，报错信息里的变量名
@@ -177,3 +177,8 @@ Matrix<Dual<T>> LocalDeriv(const Matrix<Dual<T>>& A, FunctionType f) {
   `src/quat/quaternion.hpp` = **5%**，`--coverage -c` 从零重建 = **96%**。
   **假低值比没有覆盖率更贵**——它会让人去补根本不缺的判据。
   ⇒ `run_tests.sh --coverage` 已默认强制重建 `build-cov`，别关掉。
+- **跨行的 `$$…$$` 块会让整条消息的公式全不显示**（2026-10-30 用户反馈「碰到好几次了」）。
+  渲染器按行切分，跨行块被截成「未闭合的 `$`」⇒ 报
+  `parse error: katex cannot use function '$' at position N`，**后面的公式也跟着不显示**。
+  ⇒ 聊天回复里**只用单行行内 `$…$`**，一条公式一行；并列式子拆成两行，不要用 `\qquad` 硬塞。
+  细则在 `AGENTS.md` §五 的「聊天回复的渲染坑」。

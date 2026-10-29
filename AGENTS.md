@@ -175,7 +175,7 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 
 | 场合 | 写法 |
 |---|---|
-| 聊天回复 | LaTeX 渲染：行内 `$…$`、独立 `$$…$$`（2026-10-26 用户定：行内禁 Unicode/ASCII 混排公式，如 `J^i_j`）；不输出裸 LaTeX 源码 |
+| 聊天回复 | LaTeX 渲染：**一律用单行行内 `$…$`**（2026-10-26 用户定：行内禁 Unicode/ASCII 混排公式，如 `J^i_j`）；不输出裸 LaTeX 源码。**`$$…$$` 不许跨行**，见下方渲染坑 |
 | 数学内容文档：`.ipynb`、`learning.md` | KaTeX：行内 `$…$`、行间 `$$…$$` |
 | 工程文档：`graphics/acceptance.md`、`docs/pitfalls.md`、`dev-progress.md`、`NOW.md`、`AGENTS.md`、`README.md`、`docs/*.md` | ASCII：`A^T`（转置）、`A^H`（共轭转置）、`[A,B] = AB − BA`（对易子） |
 | C++ 代码与注释 | 同上一行（ASCII） |
@@ -190,6 +190,16 @@ bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048
 
 > 判定规则很简单：**给 agent / 终端读的用 ASCII，给 Jupyter 渲染的用 KaTeX。**
 > 同一份文档内不要混用两套写法。
+
+**聊天回复的渲染坑（2026-10-30 用户反馈「碰到好几次了」，硬规则）**
+
+- **`$$…$$` 块不许跨行。** 渲染器按行切分，跨行的 `$$` 块会被截断成「未闭合的 `$`」，
+  报 `parse error: katex cannot use function '$' at position N`，整条消息的公式全不显示。
+- 因此**优先只用单行行内 `$…$`**，一条公式一行；需要「两个式子并列」就拆成两行，
+  不要用 `\qquad` 硬塞进同一个块。
+- 避免这些在部分渲染器上不稳的写法：`\displaystyle`、`\operatorname`、`\mathsf`、`\big(` / `\Big(`。
+  用 `\mathrm{}`、`\left(...\right)`、`\top` 代替。
+- 一条消息里公式很多时，**宁可变丑也不要跨行** —— 报错时用户拿不到任何公式。
 
 ---
 
