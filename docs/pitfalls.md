@@ -114,6 +114,17 @@ if (Abs2(A(i,j) - AH(j,i)) > tol*tol) return false;
 单次结果受「上次是否真的重编译」影响。正确做法：
 `跑基线（记 FAIL=0）→ 注入 → 跑（FAIL 应 >0）→ 恢复 + touch → 跑（应回 0）`。
 
+**③ `ctest --test-dir build` 不触发构建**（2026-10-29 差点踩）
+
+改了 `src/*.hpp` 之后直接跑 `ctest`，**跑的是上次编译出来的二进制** ⇒ 全绿是假的。
+`ctest` 只执行已存在的测试可执行文件，**不做编译**。
+
+- 权威入口：**`./graphics/run_tests.sh`**（配置 + 构建 + ctest 一条龙）
+- `ctest` 单独跑只适合「确认刚构建过的东西没坏」，**不能用来验收源码改动**
+
+同类变体：`cmake --build` 不带 target 走 `ALL`，所以 `demo/apps/` 里没加
+`EXCLUDE_FROM_ALL` 的半成品会让整个构建失败 —— 那时 `ctest` 一条都跑不到。
+
 ## 十、`Dual` 的「局部导数」不看种子（2026-10-17）
 
 `Derive(Apply(A, f))` 得到的是 **`f'(x)·A.derive`** —— **依赖外部种子**；种子为 0 时局部导数全为 0。
