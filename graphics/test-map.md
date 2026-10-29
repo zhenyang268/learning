@@ -296,6 +296,8 @@
 | `tensor` | 24（`[P1]`–`[P24]`）+ `[G]` 8 条已写好但未注册 | 35 处 `throw std::...` | legacy |
 | `quaternion` | **0**（2026-10-29 已全部落地，160 项判据） | 剩 5 处全是契约性：2 处 `domain_error` + 3 处 `invalid_argument` | **gtest**（2026-10-30） |
 | `scalar_traits` | 0 | — | **gtest**（2026-10-30） |
+| `solve` | 0 | 4 处 `throw` 全有 `[E] Contract` 覆盖（2 `runtime_error` + 2 `invalid_argument`） | **gtest**（2026-10-30） |
+| `expm` | 0 | ⚠️ `expm_pade` 的 2 处 `invalid_argument`（非方阵 / 空矩阵，`expm.hpp:133,136`）**无契约判据** —— 覆盖率实测唯一的两行 0 命中，属「契约用例缺一条」 | **gtest**（2026-10-30） |
 
 **占位的语义是「如实钉住不可用」**，不是「测过了」。
 **统计覆盖率时 `tensor` 这一块必须单列**，不能算进「已实现」——

@@ -1,10 +1,7 @@
 # linalg 层验收 —— 每个用例对应一个交付判据
 # 公共测试工具在 demo/common.hpp
-add_executable(solve solve.cpp)
-target_include_directories(solve PRIVATE
-    ${GRAPHICS_SRC_DIR}
-)
-add_test(NAME solve COMMAND solve)
+# 框架: gtest (2026-10-30 迁移) —— 判据名保留原样, 走 SCOPED_TRACE
+graphics_add_gtest(solve)
 
 add_executable(inverse inverse.cpp)
 target_include_directories(inverse PRIVATE
@@ -43,11 +40,8 @@ target_include_directories(dual_complex PRIVATE
 add_test(NAME dual_complex COMMAND dual_complex)
 
 # 指数映射 (expm: exp 非单射 / SU(2) 双覆盖 / BCH 测阶 三刀 + 超强判据)
-add_executable(expm expm.cpp)
-target_include_directories(expm PRIVATE
-    ${GRAPHICS_SRC_DIR}
-)
-add_test(NAME expm COMMAND expm)
+# 框架: gtest (2026-10-30 迁移) —— 判据编号 [A1]–[E4] 保留, 走 SCOPED_TRACE
+graphics_add_gtest(expm)
 
 # so(3) 三维向量算子 (Cross / Hat / Vee) —— A4 李群线载体, 只依赖 core/matrix.hpp
 add_executable(so3 so3.cpp)
