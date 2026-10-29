@@ -1,4 +1,4 @@
-// quaternion.cpp -- 四元数验收 (B1 / V2.5 / V2.6)
+// quaternion.cpp -- 四元数验收 (B1)
 //
 // ---------------------------------------------------------------------------
 // 判据的设计原则 (graphics 3.3): **判据独立于实现路径**
@@ -22,6 +22,9 @@
 // T = double 与 T = float **各跑一遍** (模板 bug 只在实例化时暴露;
 // 本项目单域探针连续误判过 5 次, 正反两个方向都栽过)。
 // float 的阈值放宽到 ~1e-5 (float eps ≈ 1.2e-7, sin/cos 相对误差 ~1e-7)。
+//
+// 框架: googletest + TYPED_TEST (2026-10-30 迁移) —— 双域由 TYPED_TEST_SUITE 保证,
+// 不再靠手写两遍调用; 判据编号 [X#] 通过 SCOPED_TRACE 保留, 与 test-map.md 对得上。
 //
 // ---------------------------------------------------------------------------
 // 已知盲区 (写下来防误判)
@@ -53,19 +56,22 @@
 //   · **D2 的 1e-3 是"差足够大"**: 非单位 q 下 q⁻¹ 与 q* 差 O(1), 不是比精度。
 //   · **F9 的 1e-4 是 ptp (峰峰值)**: 均匀时应为 0, 只留浮点噪声余量。
 //   · **F10 期望 5° 而不是 175°**: 两者差 O(1), 一抓一个准; 阈值 1e-4 够宽。
+//   · **G 段用 EXPECT_EXACT_THROW**: std::invalid_argument 与 std::out_of_range
+//     都派生自 logic_error, 判基类会假绿 (见 demo/common.hpp 的说明)。
 //
 // ---------------------------------------------------------------------------
 // 运行:
-//   ./graphics/run_tests.sh                 # 全量 (本用例注册名: quaternion)
-//   ./graphics/build/demo/quat/quaternion   # 单跑
-//   ./graphics/run_tests.sh -w              # 顺带开 -Wall -Wextra
+//   ./graphics/run_tests.sh                          # 全量 (注册名: quaternion)
+//   ./graphics/build/demo/quat/quaternion            # 单跑
+//   ./graphics/build/demo/quat/quaternion --gtest_filter='*Hamilton*'   # 只跑一节
+// ---------------------------------------------------------------------------
 
-#include "../common.hpp"
+#include "gtest_common.hpp"
+
 #include "quat/quaternion.hpp"
 
 #include <cmath>
 #include <cstdio>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -104,17 +110,7 @@ Matrix<T> V3(T a, T b, T c)
     return Matrix<T>(3, 1, std::vector<T>{a, b, c});
 }
 
-template <typename T>
-std::string FmtV(const Matrix<T>& v)
-{
-    char buf[160];
-    std::snprintf(buf, sizeof(buf), "(%.9g, %.9g, %.9g)",
-                  static_cast<double>(v(0, 0)), static_cast<double>(v(1, 0)),
-                  static_cast<double>(v(2, 0)));
-    return std::string(buf);
-}
-
-// 矩阵∞范数差 (走 common.hpp 的 MaxAbs2 再开方, 与全库口径一致: D7)
+// 矩阵∞范数差 (元素级最大绝对差, 与全库口径一致: D7 只比实数域)
 template <typename T>
 double MatDiff(const Matrix<T>& A, const Matrix<T>& B)
 {
@@ -128,20 +124,6 @@ double MatDiff(const Matrix<T>& A, const Matrix<T>& B)
     return best;
 }
 
-template <typename F>
-bool ThrowsDomainError(F f)
-{
-    try { f(); } catch (const std::domain_error&) { return true; } catch (...) { return false; }
-    return false;
-}
-
-template <typename F>
-bool ThrowsInvalidArgument(F f)
-{
-    try { f(); } catch (const std::invalid_argument&) { return true; } catch (...) { return false; }
-    return false;
-}
-
 // 绕 +y 转 theta (半角) —— 多处判据要用
 template <typename T>
 Quaternion<T> QY(T theta)
@@ -150,76 +132,96 @@ Quaternion<T> QY(T theta)
     return Quaternion<T>(std::cos(h), T(0), std::sin(h), T(0));
 }
 
-// ---- [A] ① 基本代数 -------------------------------------------------------
+// 判据编号保留: [X#] 标签进 SCOPED_TRACE, 失败时与 test-map.md 直接对上
+#define STEP(label) SCOPED_TRACE(label)
+#define CHECK_TRUE(label, cond)      \
+    do {                             \
+        STEP(label);                 \
+        EXPECT_TRUE(cond);           \
+    } while (0)
 
 template <typename T>
-void TestAlgebra(Checker& ck, const char* tag)
+class QuaternionTest : public ::testing::Test
 {
+protected:
+    static constexpr T kTol = T(1e-6);      // A~D 段
+    static constexpr T kTolE = T(1e-5);     // E~F 段 (经 sin/cos, float 更松)
+    static constexpr T kPi = T(3.14159265358979323846);
+};
+
+using QuaternionTypes = ::testing::Types<double, float>;
+TYPED_TEST_SUITE(QuaternionTest, QuaternionTypes);
+
+// ---- [A] ① 基本代数 -------------------------------------------------------
+
+TYPED_TEST(QuaternionTest, Algebra)
+{
+    using T = TypeParam;
     using Q = Quaternion<T>;
-    const T tol = T(1e-6);
+    const T tol = TestFixture::kTol;
 
     const Q q0;
-    ck.check(q0.w == T(1) && q0.x == T(0) && q0.y == T(0) && q0.z == T(0),
-             std::string("[A1] ") + tag + " 默认构造 = 单位元 (1,0,0,0)  实测 " + FmtQ(q0));
+{ STEP("[A1] 默认构造 = 单位元 (1,0,0,0)");
+    EXPECT_TRUE(q0.w == T(1) && q0.x == T(0) && q0.y == T(0) && q0.z == T(0))
+    << FmtQ(q0); }
 
-    ck.check(SameQ(q0, Q::Identity(), T(0)),
-             std::string("[A2] ") + tag + " Identity() 与默认构造一致");
+
+    CHECK_TRUE("[A2] Identity() 与默认构造一致", SameQ(q0, Q::Identity(), T(0)));
 
     const Q a(T(1), T(2), T(3), T(4));
-    ck.check(a.w == T(1) && a.x == T(2) && a.y == T(3) && a.z == T(4),
-             std::string("[A3] ") + tag + " 四参构造逐位就位  实测 " + FmtQ(a));
+{ STEP("[A3] 四参构造逐位就位");
+    EXPECT_TRUE(a.w == T(1) && a.x == T(2) && a.y == T(3) && a.z == T(4)) << FmtQ(a); }
+
 
     const Q b(T(0.5), T(-1.5), T(2), T(-0.25));
-    ck.check(SameQ(a + b, Q(T(1.5), T(0.5), T(5), T(3.75)), tol),
-             std::string("[A4] ") + tag + " 加法逐位  a+b = " + FmtQ(a + b));
+{ STEP("[A4] 加法逐位");
+    EXPECT_TRUE(SameQ(a + b, Q(T(1.5), T(0.5), T(5), T(3.75)), tol)) << FmtQ(a + b); }
 
-    ck.check(SameQ(a - b, Q(T(0.5), T(3.5), T(1), T(4.25)), tol),
-             std::string("[A5] ") + tag + " 减法逐位  a-b = " + FmtQ(a - b));
+{ STEP("[A5] 减法逐位");
+    EXPECT_TRUE(SameQ(a - b, Q(T(0.5), T(3.5), T(1), T(4.25)), tol)) << FmtQ(a - b); }
 
-    ck.check(SameQ(a + (-a), Q(T(0), T(0), T(0), T(0)), T(0)),
-             std::string("[A6] ") + tag + " 一元负: a + (-a) = 0 (逐位精确)");
 
-    ck.check(SameQ(a * T(2), T(2) * a, T(0)) && (a * T(2)).x == T(4),
-             std::string("[A7] ") + tag + " 标量乘 q*2 == 2*q, 且逐位翻倍  " + FmtQ(a * T(2)));
+    CHECK_TRUE("[A6] 一元负: a + (-a) = 0 (逐位精确)",
+               SameQ(a + (-a), Q(T(0), T(0), T(0), T(0)), T(0)));
+{ STEP("[A7] 标量乘 q*2 == 2*q, 且逐位翻倍");
+    EXPECT_TRUE(SameQ(a * T(2), T(2) * a, T(0)) && (a * T(2)).x == T(4)) << FmtQ(a * T(2)); }
 
-    ck.check(SameQ((a + b) * T(2), a * T(2) + b * T(2), tol),
-             std::string("[A8] ") + tag + " 标量乘对加法分配");
+
+    CHECK_TRUE("[A8] 标量乘对加法分配",
+               SameQ((a + b) * T(2), a * T(2) + b * T(2), tol));
 }
 
 // ---- [B] ② 共轭 / 范数 / IsZero -------------------------------------------
 
-template <typename T>
-void TestConjugateNorm(Checker& ck, const char* tag)
+TYPED_TEST(QuaternionTest, ConjugateNorm)
 {
+    using T = TypeParam;
     using Q = Quaternion<T>;
-    const Q a(T(1), T(2), T(3), T(4));
 
+    const Q a(T(1), T(2), T(3), T(4));
     const Q c = a.Conjugate();
-    ck.check(c.w == T(1) && c.x == T(-2) && c.y == T(-3) && c.z == T(-4),
-             std::string("[B1] ") + tag + " 共轭只翻向量部分  q* = " + FmtQ(c));
+{ STEP("[B1] 共轭只翻向量部分");
+    EXPECT_TRUE(c.w == T(1) && c.x == T(-2) && c.y == T(-3) && c.z == T(-4)) << FmtQ(c); }
+
 
     // 1 + 4 + 9 + 16 = 30, 整数运算在 float/double 下都精确
-    ck.check(a.SquaredNorm() == T(30),
-             std::string("[B2] ") + tag + " |q|^2 = 30 (逐位精确)");
+    CHECK_TRUE("[B2] |q|^2 = 30 (逐位精确)", a.SquaredNorm() == T(30));
+{ STEP("[B3] |q| = sqrt(30)");
+    EXPECT_NEAR(static_cast<double>(a.Norm()), std::sqrt(30.0), 1e-6); }
 
-    ck.check(std::fabs(a.Norm() - T(std::sqrt(30.0))) <= T(1e-6),
-             std::string("[B3] ") + tag + " |q| = sqrt(30)");
 
-    // 共轭是对合 (二次等于自身)
-    ck.check(SameQ(a.Conjugate().Conjugate(), a, T(0)),
-             std::string("[B4] ") + tag + " 共轭对合: (q*)* = q (逐位精确)");
+    CHECK_TRUE("[B4] 共轭对合: (q*)* = q (逐位精确)",
+               SameQ(a.Conjugate().Conjugate(), a, T(0)));
 
-    // 共轭的范数不变
-    ck.check(c.SquaredNorm() == a.SquaredNorm(),
-             std::string("[B5] ") + tag + " |q*|^2 = |q|^2 (逐位精确)");
+    CHECK_TRUE("[B5] |q*|^2 = |q|^2 (逐位精确)", c.SquaredNorm() == a.SquaredNorm());
 
-    // IsZero: 精确判据, 不带容差
-    ck.check(Q(T(0), T(0), T(0), T(0)).IsZero() && !a.IsZero(),
-             std::string("[B6] ") + tag + " IsZero: 全零为 true, 非零为 false");
+    CHECK_TRUE("[B6] IsZero: 全零为 true, 非零为 false",
+               Q(T(0), T(0), T(0), T(0)).IsZero() && !a.IsZero());
+
     // 极小但非零 **不是** zero —— 这是"不带容差"的正面判据
-    ck.check(!Q(T(1e-300), T(0), T(0), T(0)).IsZero()
-                 || sizeof(T) == sizeof(float),   // float 下 1e-300 就是 0
-             std::string("[B7] ") + tag + " 极小非零四元数 IsZero() == false (不带容差)");
+    CHECK_TRUE("[B7] 极小非零四元数 IsZero() == false (不带容差)",
+               !Q(T(1e-300), T(0), T(0), T(0)).IsZero()
+                   || sizeof(T) == sizeof(float));   // float 下 1e-300 就是 0
 }
 
 // ---- [C] ① 的魂: Hamilton 积 ----------------------------------------------
@@ -231,64 +233,71 @@ void TestConjugateNorm(Checker& ck, const char* tag)
 //   ③ 非交换 [i,k] ≠ 0             —— 钉死"确实不是复数"
 // 三者合起来才能唯一确定 Hamilton 约定。
 
-template <typename T>
-void TestHamilton(Checker& ck, const char* tag)
+TYPED_TEST(QuaternionTest, HamiltonProduct)
 {
+    using T = TypeParam;
     using Q = Quaternion<T>;
-    const T tol = T(1e-6);
+    const T tol = TestFixture::kTol;
 
     const Q i(T(0), T(1), T(0), T(0));
     const Q j(T(0), T(0), T(1), T(0));
     const Q k(T(0), T(0), T(0), T(1));
     const Q one(T(1), T(0), T(0), T(0));
 
-    auto chkMul = [&](const Q& a, const Q& b, const Q& want, const std::string& name) {
-        ck.check(SameQ(a * b, want, tol), name + "  实测 " + FmtQ(a * b));
-    };
-
     // 乘法表 (Hamilton 约定 ij = k, ji = -k)
-    chkMul(i, j,  k,  std::string("[C1] ") + tag + " i*j = +k");
-    chkMul(j, k,  i,  std::string("[C2] ") + tag + " j*k = +i");
-    chkMul(k, i,  j,  std::string("[C3] ") + tag + " k*i = +j");
-    chkMul(j, i,  -k, std::string("[C4] ") + tag + " j*i = -k  (反向)");
-    chkMul(i, k,  -j, std::string("[C5] ") + tag + " i*k = -j  (反向)");
+{ STEP("[C1] i*j = +k");
+    EXPECT_TRUE(SameQ(i * j, k, tol)) << FmtQ(i * j); }
+
+{ STEP("[C2] j*k = +i");
+    EXPECT_TRUE(SameQ(j * k, i, tol)) << FmtQ(j * k); }
+
+{ STEP("[C3] k*i = +j");
+    EXPECT_TRUE(SameQ(k * i, j, tol)) << FmtQ(k * i); }
+
+{ STEP("[C4] j*i = -k  (反向)");
+    EXPECT_TRUE(SameQ(j * i, -k, tol)) << FmtQ(j * i); }
+
+{ STEP("[C5] i*k = -j  (反向)");
+    EXPECT_TRUE(SameQ(i * k, -j, tol)) << FmtQ(i * k); }
+
 
     // 非交换: ik = -j 而 ki = +j, 差 2j —— 量级 O(1), 不是舍入残渣
-    ck.check(SameQ(i * k + k * i, Q(T(0), T(0), T(0), T(0)), tol),
-             std::string("[C6] ") + tag + " 不同基元反交换: ik + ki = 0");
-    ck.check((i * k - k * i).SquaredNorm() == T(4),
-             std::string("[C7] ") + tag + " 非交换量 |ik - ki|^2 = 4 (O(1), 不是舍入)");
+    CHECK_TRUE("[C6] 不同基元反交换: ik + ki = 0",
+               SameQ(i * k + k * i, Q(T(0), T(0), T(0), T(0)), tol));
 
-    // 单位元
+    CHECK_TRUE("[C7] 非交换量 |ik - ki|^2 = 4 (O(1), 不是舍入)",
+               (i * k - k * i).SquaredNorm() == T(4));
+
     const Q a(T(1), T(2), T(3), T(4));
-    ck.check(SameQ(a * one, a, T(0)) && SameQ(one * a, a, T(0)),
-             std::string("[C8] ") + tag + " 单位元: a*1 = 1*a = a (逐位精确)");
+    CHECK_TRUE("[C8] 单位元: a*1 = 1*a = a (逐位精确)",
+               SameQ(a * one, a, T(0)) && SameQ(one * a, a, T(0)));
 
     // 结合律 / 分配律
     const Q b(T(0.5), T(-1.5), T(2), T(-0.25));
     const Q c(T(-2), T(0.75), T(1), T(3));
-    ck.check(SameQ((a * b) * c, a * (b * c), tol * T(10)),
-             std::string("[C9] ") + tag + " 结合律 (ab)c = a(bc)");
-    ck.check(SameQ(a * (b + c), a * b + a * c, tol * T(10)),
-             std::string("[C10] ") + tag + " 分配律 a(b+c) = ab + ac");
+    CHECK_TRUE("[C9] 结合律 (ab)c = a(bc)",
+               SameQ((a * b) * c, a * (b * c), tol * T(10)));
+    CHECK_TRUE("[C10] 分配律 a(b+c) = ab + ac",
+               SameQ(a * (b + c), a * b + a * c, tol * T(10)));
 
     // 共轭是**反**自同构: (ab)* = b* a* —— 顺序反了就不成立, 专抓乘法写反
-    ck.check(SameQ((a * b).Conjugate(), b.Conjugate() * a.Conjugate(), tol * T(10)),
-             std::string("[C11] ") + tag + " 共轭反自同构 (ab)* = b* a*");
+    CHECK_TRUE("[C11] 共轭反自同构 (ab)* = b* a*",
+               SameQ((a * b).Conjugate(), b.Conjugate() * a.Conjugate(), tol * T(10)));
 
     // 范数乘性 (Lagrange 恒等式 |ab| = |a||b|): 判据独立于四个分量各自的值
-    ck.check(std::fabs((a * b).SquaredNorm() - a.SquaredNorm() * b.SquaredNorm())
-                 <= tol * a.SquaredNorm() * b.SquaredNorm() * T(10),
-             std::string("[C12] ") + tag + " |ab|^2 = |a|^2 |b|^2");
+{ STEP("[C12] |ab|^2 = |a|^2 |b|^2");
+    EXPECT_LE(static_cast<double>(std::fabs((a * b).SquaredNorm()
+    - a.SquaredNorm() * b.SquaredNorm())),
+    static_cast<double>(tol * a.SquaredNorm() * b.SquaredNorm() * T(10))); }
+
 
     // 同轴旋转相加: q(θ1)·q(θ2) = q(θ1+θ2)  —— 半角逻辑的正确性
-    ck.check(SameQ(QY(T(0.8)) * QY(T(0.6)), QY(T(1.4)), tol),
-             std::string("[C13] ") + tag + " q(0.8)*q(0.6) = q(1.4) (同轴相加)");
+    CHECK_TRUE("[C13] q(0.8)*q(0.6) = q(1.4) (同轴相加)",
+               SameQ(QY(T(0.8)) * QY(T(0.6)), QY(T(1.4)), tol));
 
     // 双覆盖: 转 2π 得 -q (转 4π 才回到 q)
-    const T pi = T(3.14159265358979323846);
-    ck.check(SameQ(QY(T(0.5) + T(2) * pi), -QY(T(0.5)), tol),
-             std::string("[C14] ") + tag + " q(θ+2π) = -q(θ)  (SU(2) 双覆盖)");
+    CHECK_TRUE("[C14] q(θ+2π) = -q(θ)  (SU(2) 双覆盖)",
+               SameQ(QY(T(0.5) + T(2) * TestFixture::kPi), -QY(T(0.5)), tol));
 }
 
 // ---- [D] ② 逆与归一化 -----------------------------------------------------
@@ -296,51 +305,50 @@ void TestHamilton(Checker& ck, const char* tag)
 // 这一节的核心是**左右逆都测**: 四元数不交换, 所以 q·q⁻¹ 与 q⁻¹·q 是两次
 // 独立的乘法, 只测一边漏掉一半代数。
 
-template <typename T>
-void TestInverseNormalize(Checker& ck, const char* tag)
+TYPED_TEST(QuaternionTest, InverseNormalize)
 {
+    using T = TypeParam;
     using Q = Quaternion<T>;
-    const T tol = T(1e-6);
+    const T tol = TestFixture::kTol;
 
     // 关键: 用**非单位**四元数 (|q| = sqrt(30) ≈ 5.48)。
     // 单位四元数下 q⁻¹ = q*, 看不出来是不是真的除了 |q|²。
     const Q a(T(1), T(2), T(3), T(4));
     const Q inv = a.Inverse();
 
-    ck.check(SameQ(a * inv, Q::Identity(), tol) && SameQ(inv * a, Q::Identity(), tol),
-             std::string("[D1] ") + tag + " 左右逆: q·q⁻¹ = q⁻¹·q = 1 (非单位 q)");
+    CHECK_TRUE("[D1] 左右逆: q·q⁻¹ = q⁻¹·q = 1 (非单位 q)",
+               SameQ(a * inv, Q::Identity(), tol) && SameQ(inv * a, Q::Identity(), tol));
 
     // 非单位四元数下 q⁻¹ != q* —— 差是 O(1), 专抓"写死成只支持单位四元数"
-    ck.check(!SameQ(inv, a.Conjugate(), T(1e-3)),
-             std::string("[D2] ") + tag + " 非单位 q: q⁻¹ != q*  (差 O(1))  |q⁻¹-q*|∞="
-                 + std::to_string(static_cast<double>(
-                       std::fabs(inv.w - a.Conjugate().w))));
+{ STEP("[D2] 非单位 q: q⁻¹ != q*  (差 O(1))");
+    EXPECT_FALSE(SameQ(inv, a.Conjugate(), T(1e-3)))
+    << "|q⁻¹-w - q*-w| = " << std::fabs(inv.w - a.Conjugate().w); }
+
 
     // 精确值: q*/|q|² = (1,-2,-3,-4)/30
-    ck.check(SameQ(inv, Q(T(1) / T(30), T(-2) / T(30), T(-3) / T(30), T(-4) / T(30)),
-                   tol),
-             std::string("[D3] ") + tag + " q⁻¹ = q*/|q|² 逐位  " + FmtQ(inv));
+{ STEP("[D3] q⁻¹ = q*/|q|² 逐位");
+    EXPECT_TRUE(SameQ(inv, Q(T(1) / T(30), T(-2) / T(30), T(-3) / T(30), T(-4) / T(30)), tol))
+    << FmtQ(inv); }
 
-    // 对合: (q⁻¹)⁻¹ = q
-    ck.check(SameQ(inv.Inverse(), a, tol * T(10)),
-             std::string("[D4] ") + tag + " (q⁻¹)⁻¹ = q");
+
+    CHECK_TRUE("[D4] (q⁻¹)⁻¹ = q", SameQ(inv.Inverse(), a, tol * T(10)));
 
     // Normalize: |q/|q|| = 1
     const Q n = a.Normalize();
-    ck.check(std::fabs(n.Norm() - T(1)) <= tol,
-             std::string("[D5] ") + tag + " |Normalize(q)| = 1  实测 " + FmtQ(n));
+{ STEP("[D5] |Normalize(q)| = 1");
+    EXPECT_NEAR(static_cast<double>(n.Norm()), 1.0, 1e-6); }
 
-    // 归一化不改方向: n 与 a 是同一旋转, 且逐分量成比例
-    ck.check(SameQ(n, a * (T(1) / a.Norm()), tol),
-             std::string("[D6] ") + tag + " Normalize = q * (1/|q|)");
+    EXPECT_TRUE(SameQ(n, n, T(0))) << FmtQ(n);
+
+    // 归一化不改方向: n 与 a 逐分量成比例
+    CHECK_TRUE("[D6] Normalize = q * (1/|q|)",
+               SameQ(n, a * (T(1) / a.Norm()), tol));
 
     // 单位四元数: Normalize 是恒等 (幂等)
-    ck.check(SameQ(n.Normalize(), n, tol),
-             std::string("[D7] ") + tag + " Normalize 幂等 (已单位化再归不变)");
+    CHECK_TRUE("[D7] Normalize 幂等 (已单位化再归不变)", SameQ(n.Normalize(), n, tol));
 
     // 单位四元数下 q⁻¹ == q* —— 这条与 [D2] 一起把"两种情形"都钉住
-    ck.check(SameQ(n.Inverse(), n.Conjugate(), tol),
-             std::string("[D8] ") + tag + " 单位 q: q⁻¹ = q*");
+    CHECK_TRUE("[D8] 单位 q: q⁻¹ = q*", SameQ(n.Inverse(), n.Conjugate(), tol));
 }
 
 // ---- [E] ③ 轴角与矩阵互转 + Rotate ----------------------------------------
@@ -348,35 +356,36 @@ void TestInverseNormalize(Checker& ck, const char* tag)
 // Rotate 最靠得住的判据是**与 ToMatrix()*v 对拍** —— 两条完全独立的路径
 // (一条走四元数乘 q v q*, 一条走 3x3 矩阵乘)。
 
-template <typename T>
-void TestAxisAngleMatrix(Checker& ck, const char* tag)
+TYPED_TEST(QuaternionTest, AxisAngleAndMatrix)
 {
+    using T = TypeParam;
     using Q = Quaternion<T>;
-    const T tol = T(1e-5);
-    const T pi = T(3.14159265358979323846);
+    const T tol = TestFixture::kTolE;
+    const T pi = TestFixture::kPi;
 
     // ---- FromAxisAngle: 半角 ----
     const Q r = Q::FromAxisAngle(T(0), T(1), T(0), T(1.2));
     const T h = T(1.2) / T(2);
-    ck.check(SameQ(r, Q(std::cos(h), T(0), std::sin(h), T(0)), tol),
-             std::string("[E1] ") + tag + " FromAxisAngle 用**半角**  " + FmtQ(r));
+{ STEP("[E1] FromAxisAngle 用**半角**");
+    EXPECT_TRUE(SameQ(r, Q(std::cos(h), T(0), std::sin(h), T(0)), tol)) << FmtQ(r); }
+
 
     // 单位轴: |q| = 1
-    ck.check(std::fabs(r.Norm() - T(1)) <= tol,
-             std::string("[E2] ") + tag + " FromAxisAngle 结果单位长");
+{ STEP("[E2] FromAxisAngle 结果单位长");
+    EXPECT_NEAR(static_cast<double>(r.Norm()), 1.0, static_cast<double>(tol)); }
+
 
     // 非单位轴输入: 内部归一化, 结果与单位轴版本一致
     const Q r2 = Q::FromAxisAngle(T(0), T(5), T(0), T(1.2));      // 轴长 5
-    ck.check(SameQ(r2, r, tol),
-             std::string("[E3] ") + tag + " 非单位轴 (0,5,0) 归一化后与 (0,1,0) 一致");
+    CHECK_TRUE("[E3] 非单位轴 (0,5,0) 归一化后与 (0,1,0) 一致", SameQ(r2, r, tol));
 
     // θ=0 => 单位元
-    ck.check(SameQ(Q::FromAxisAngle(T(1), T(2), T(3), T(0)), Q::Identity(), tol),
-             std::string("[E4] ") + tag + " θ=0 => 单位元 (任意非零轴)");
+    CHECK_TRUE("[E4] θ=0 => 单位元 (任意非零轴)",
+               SameQ(Q::FromAxisAngle(T(1), T(2), T(3), T(0)), Q::Identity(), tol));
 
     // 绕 z 转 π => (0,0,0,1), |w| = 0 (cos(π/2)=0)
-    ck.check(SameQ(Q::FromAxisAngle(T(0), T(0), T(1), pi), Q(T(0), T(0), T(0), T(1)), tol),
-             std::string("[E5] ") + tag + " 绕 z 转 π => (0,0,0,1)");
+    CHECK_TRUE("[E5] 绕 z 转 π => (0,0,0,1)",
+               SameQ(Q::FromAxisAngle(T(0), T(0), T(1), pi), Q(T(0), T(0), T(0), T(1)), tol));
 
     // ---- ToMatrix: 逐格对拍解析值 ----
     // 绕 +y 转 θ 的解析矩阵 (标准右手系):
@@ -387,25 +396,28 @@ void TestAxisAngleMatrix(Checker& ck, const char* tag)
         std::cos(th), T(0),        std::sin(th),
         T(0),        T(1),        T(0),
         -std::sin(th), T(0),       std::cos(th)});
-    ck.check(MatDiff(R, want) <= double(tol),
-             std::string("[E6] ") + tag + " ToMatrix 绕 y: 逐格对拍解析式  diff="
-                 + std::to_string(MatDiff(R, want)));
+{ STEP("[E6] ToMatrix 绕 y: 逐格对拍解析式");
+    EXPECT_LE(MatDiff(R, want), static_cast<double>(tol)); }
+
 
     // 是旋转矩阵: R^T R = I, det = 1
     const Matrix<T> RtR = R.Transpose() * R;
-    ck.check(MatDiff(RtR, Matrix<T>::Identity(3)) <= double(tol),
-             std::string("[E7] ") + tag + " ToMatrix: RᵀR = I");
+{ STEP("[E7] ToMatrix: RᵀR = I");
+    EXPECT_LE(MatDiff(RtR, Matrix<T>::Identity(3)), static_cast<double>(tol)); }
+
+
     const T det = R(0,0)*(R(1,1)*R(2,2) - R(1,2)*R(2,1))
                 - R(0,1)*(R(1,0)*R(2,2) - R(1,2)*R(2,0))
                 + R(0,2)*(R(1,0)*R(2,1) - R(1,1)*R(2,0));
-    ck.check(std::fabs(det - T(1)) <= tol,
-             std::string("[E8] ") + tag + " ToMatrix: det R = 1  实测 "
-                 + std::to_string(static_cast<double>(det)));
+{ STEP("[E8] ToMatrix: det R = 1");
+    EXPECT_NEAR(static_cast<double>(det), 1.0, static_cast<double>(tol)); }
+
 
     // ToMatrix 内部归一化: 非单位 q 与它的归一化给同一个 R
     const Q scaled = QY(th) * T(3.7);
-    ck.check(MatDiff(scaled.ToMatrix(), R) <= double(tol),
-             std::string("[E9] ") + tag + " ToMatrix 内部归一化 (q*3.7 与 q 同 R)");
+{ STEP("[E9] ToMatrix 内部归一化 (q*3.7 与 q 同 R)");
+    EXPECT_LE(MatDiff(scaled.ToMatrix(), R), static_cast<double>(tol)); }
+
 
     // ---- FromMatrix: 四分支**各自走到** ----
     // 分支判据: t = tr(R) > 0 走分支 1; 否则看 R00/R11/R22 谁最大。
@@ -413,97 +425,99 @@ void TestAxisAngleMatrix(Checker& ck, const char* tag)
     // 只测 R=I (tr=3) 会让分支 2/3/4 全漏 —— 那是无效判据。
     auto branchCheck = [&](const Q& q, const char* name) {
         const Q back = Q::FromMatrix(q.ToMatrix());
-        ck.check(SameRotation(back, q, tol),
-                 std::string("[E10] ") + tag + " 四分支往返 " + name + "  →  " + FmtQ(back));
+        STEP(name);
+        EXPECT_TRUE(SameRotation(back, q, tol)) << "back = " << FmtQ(back);
     };
-    branchCheck(QY(T(0.6)), "分支1 (θ=0.6, tr>0)");
-    branchCheck(Q::FromAxisAngle(T(1), T(0), T(0), pi), "分支2 (绕x转π, R00=1)");
-    branchCheck(Q::FromAxisAngle(T(0), T(1), T(0), pi), "分支3 (绕y转π, R11=1)");
-    branchCheck(Q::FromAxisAngle(T(0), T(0), T(1), pi), "分支4 (绕z转π, R22=1)");
-    // 再加一条一般轴的 vo: 混合轴 120° (三个对角元相等, 考验并列)
-    branchCheck(Q::FromAxisAngle(T(1), T(1), T(1), T(2) * pi / T(3)), "混合轴 120°");
+    branchCheck(QY(T(0.6)), "[E10] 分支1 (θ=0.6, tr>0)");
+    branchCheck(Q::FromAxisAngle(T(1), T(0), T(0), pi), "[E10] 分支2 (绕x转π, R00=1)");
+    branchCheck(Q::FromAxisAngle(T(0), T(1), T(0), pi), "[E10] 分支3 (绕y转π, R11=1)");
+    branchCheck(Q::FromAxisAngle(T(0), T(0), T(1), pi), "[E10] 分支4 (绕z转π, R22=1)");
+    // 再加一条一般轴: 混合轴 120° (三个对角元相等, 考验并列)
+    branchCheck(Q::FromAxisAngle(T(1), T(1), T(1), T(2) * pi / T(3)), "[E10] 混合轴 120°");
 
     // ---- Rotate: 与 ToMatrix()*v 对拍 (两条独立路径) ----
     const Q q = Q::FromAxisAngle(T(0.3), T(-0.7), T(0.5), T(1.1));
     const Matrix<T> v = V3<T>(T(1.2), T(-0.4), T(2.3));
     const Matrix<T> viaQ = q.Rotate(v);
     const Matrix<T> viaM = q.ToMatrix() * v;
+{ STEP("[E11] Rotate 返回 3x1 列向量 (不是矩阵!)");
+    EXPECT_EQ(viaQ.Rows(), 3); }
 
-    ck.check(viaQ.Rows() == 3 && viaQ.Cols() == 1,
-             std::string("[E11] ") + tag + " Rotate 返回 3x1 列向量 (不是矩阵!)  实测 "
-                 + std::to_string(viaQ.Rows()) + "x" + std::to_string(viaQ.Cols()));
-    ck.check(MatDiff(viaQ, viaM) <= double(tol),
-             std::string("[E12] ") + tag + " Rotate(v) == ToMatrix()*v  " + FmtV(viaQ)
-                 + " vs " + FmtV(viaM));
+    EXPECT_EQ(viaQ.Cols(), 1);
+{ STEP("[E12] Rotate(v) == ToMatrix()*v");
+    EXPECT_LE(MatDiff(viaQ, viaM), static_cast<double>(tol)); }
+
 
     // 保长
     auto dot3 = [](const Matrix<T>& a) {
         return a(0,0)*a(0,0) + a(1,0)*a(1,0) + a(2,0)*a(2,0);
     };
-    ck.check(std::fabs(dot3(viaQ) - dot3(v)) <= double(tol) * double(dot3(v)) * 10.0,
-             std::string("[E13] ") + tag + " Rotate 保长: |v'| = |v|");
+{ STEP("[E13] Rotate 保长: |v'| = |v|");
+    EXPECT_LE(static_cast<double>(std::fabs(dot3(viaQ) - dot3(v))),
+    static_cast<double>(tol) * static_cast<double>(dot3(v)) * 10.0); }
+
 
     // 轴上不动点: 绕 y 转任意角, v = (0,1,0) 不变
     const Matrix<T> axisY = V3<T>(T(0), T(1), T(0));
-    ck.check(MatDiff(QY(T(1.1)).Rotate(axisY), axisY) <= double(tol),
-             std::string("[E14] ") + tag + " Rotate: 轴上的向量不动");
+{ STEP("[E14] Rotate: 轴上的向量不动");
+    EXPECT_LE(MatDiff(QY(T(1.1)).Rotate(axisY), axisY), static_cast<double>(tol)); }
 
-    // 单位四元数 => 恒等
-    ck.check(MatDiff(Q::Identity().Rotate(v), v) <= double(tol),
-             std::string("[E15] ") + tag + " Rotate(单位四元数) = 恒等");
+{ STEP("[E15] Rotate(单位四元数) = 恒等");
+    EXPECT_LE(MatDiff(Q::Identity().Rotate(v), v), static_cast<double>(tol)); }
 
-    // q 与 -q 给同一个结果 (双覆盖的一致性)
-    ck.check(MatDiff(q.Rotate(v), (-q).Rotate(v)) <= double(tol),
-             std::string("[E16] ") + tag + " Rotate: q 与 -q 结果相同 (双覆盖)");
+{ STEP("[E16] Rotate: q 与 -q 结果相同 (双覆盖)");
+    EXPECT_LE(MatDiff(q.Rotate(v), (-q).Rotate(v)), static_cast<double>(tol)); }
+
 }
 
 // ---- [F] ④ 角度与插值 -----------------------------------------------------
 
-template <typename T>
-void TestAngleAndInterp(Checker& ck, const char* tag)
+TYPED_TEST(QuaternionTest, AngleAndInterpolation)
 {
+    using T = TypeParam;
     using Q = Quaternion<T>;
-    const T tol = T(1e-5);
-    const T pi = T(3.14159265358979323846);
+    const T tol = TestFixture::kTolE;
+    const T pi = TestFixture::kPi;
 
     // ---- AngleOf ----
-    ck.check(std::fabs(Q::Identity().AngleOf() - T(0)) <= tol,
-             std::string("[F1] ") + tag + " AngleOf(单位元) = 0");
+{ STEP("[F1] AngleOf(单位元) = 0");
+    EXPECT_NEAR(static_cast<double>(Q::Identity().AngleOf()), 0.0, static_cast<double>(tol)); }
 
-    ck.check(std::fabs(QY(T(1.2)).AngleOf() - T(1.2)) <= tol,
-             std::string("[F2] ") + tag + " AngleOf 还原 θ  实测 "
-                 + std::to_string(static_cast<double>(QY(T(1.2)).AngleOf())));
+{ STEP("[F2] AngleOf 还原 θ");
+    EXPECT_NEAR(static_cast<double>(QY(T(1.2)).AngleOf()), 1.2, static_cast<double>(tol)); }
+
 
     // **最短表示**: 转 1.5π 应返回 0.5π (而不是 1.5π)
     // 这是 w<0 翻号那条分支的唯一判据 —— 不翻号会得到 1.5π
     const T got = QY(T(1.5) * pi).AngleOf();
-    ck.check(std::fabs(got - T(0.5) * pi) <= T(1e-4),
-             std::string("[F3] ") + tag + " AngleOf 取最短: q(1.5π) => 0.5π  实测 "
-                 + std::to_string(static_cast<double>(got)) + " (不翻号会得 1.5π=4.712)");
+{ STEP("[F3] AngleOf 取最短: q(1.5π) => 0.5π  (不翻号会得 1.5π=4.712)");
+    EXPECT_NEAR(static_cast<double>(got), static_cast<double>(T(0.5) * pi), 1e-4); }
+
 
     // 小角极限: θ=1e-6 时仍准确 (arccos 在这里已经掉精度)
-    ck.check(std::fabs(QY(T(1e-6)).AngleOf() - T(1e-6)) <= T(1e-10) * T(100),
-             std::string("[F4] ") + tag + " AngleOf 小角 θ=1e-6 仍准 (atan2 优于 arccos)");
+{ STEP("[F4] AngleOf 小角 θ=1e-6 仍准 (atan2 优于 arccos)");
+    EXPECT_LE(static_cast<double>(std::fabs(QY(T(1e-6)).AngleOf() - T(1e-6))), 1e-8); }
+
 
     // 非单位四元数也正确 (atan2 尺度不变)
-    ck.check(std::fabs((QY(T(0.8)) * T(4.2)).AngleOf() - T(0.8)) <= tol,
-             std::string("[F5] ") + tag + " AngleOf 对非单位 q 也正确");
+{ STEP("[F5] AngleOf 对非单位 q 也正确");
+    EXPECT_NEAR(static_cast<double>((QY(T(0.8)) * T(4.2)).AngleOf()), 0.8,
+    static_cast<double>(tol)); }
+
 
     // ---- Slerp 端点 ----
     const Q a = QY(T(0.3));
     const Q b = Q::FromAxisAngle(T(1), T(0), T(0), T(1.4));
 
-    ck.check(SameQ(Slerp(a, b, T(0)), a, tol),
-             std::string("[F6] ") + tag + " Slerp t=0 => q0 (逐位)");
-    ck.check(SameRotation(Slerp(a, b, T(1)), b, tol),
-             std::string("[F7] ") + tag + " Slerp t=1 => q1 (比 |Dot|=1, 因可能翻号)");
+    CHECK_TRUE("[F6] Slerp t=0 => q0 (逐位)", SameQ(Slerp(a, b, T(0)), a, tol));
+    CHECK_TRUE("[F7] Slerp t=1 => q1 (比 |Dot|=1, 因可能翻号)",
+               SameRotation(Slerp(a, b, T(1)), b, tol));
+{ STEP("[F8] Slerp 中点 |q|=1 (权重用 sin 的判据)");
+    EXPECT_NEAR(static_cast<double>(Slerp(a, b, T(0.5)).Norm()), 1.0,
+    static_cast<double>(tol)); }
 
-    // 中点单位长
-    ck.check(std::fabs(Slerp(a, b, T(0.5)).Norm() - T(1)) <= tol,
-             std::string("[F8] ") + tag + " Slerp 中点 |q|=1 (权重用 sin 的判据)");
 
-    // ---- Slerp 匀速性 (V2.5 的核心): 相邻增量等长 ----
-    // 量角**必须用 AngleOf (atan2 口径)**; 用 arccos 会假性涨到 1e-8。
+    // ---- Slerp 匀速性: 相邻增量等长 ----
     {
         const int N = 32;
         T dmin = T(1e9), dmax = T(0);
@@ -516,9 +530,9 @@ void TestAngleAndInterp(Checker& ck, const char* tag)
             if (ang > dmax) dmax = ang;
             prev = cur;
         }
-        ck.check(dmax - dmin <= T(1e-4),
-                 std::string("[F9] ") + tag + " Slerp 匀速: 逐帧角增量 ptp = "
-                     + std::to_string(static_cast<double>(dmax - dmin)) + " (阈值 1e-4)");
+{ STEP("[F9] Slerp 匀速: 逐帧角增量 ptp (阈值 1e-4)");
+    EXPECT_LE(static_cast<double>(dmax - dmin), 1e-4); }
+
     }
 
     // ---- Slerp 短弧: 这是**必需件**, 不是优化 ----
@@ -530,26 +544,28 @@ void TestAngleAndInterp(Checker& ck, const char* tag)
         const Q z1 = Q::FromAxisAngle(T(0), T(0), T(1), T(350) * deg);
         const T mid = Slerp(z0, z1, T(0.5)).AngleOf();
         const T want = T(5) * deg;                  // 最短表示 => 5°
-        ck.check(std::fabs(mid - want) <= T(1e-4),
-                 std::string("[F10] ") + tag + " Slerp 短弧: 0°→350° 中点 = 5°  实测 "
-                     + std::to_string(static_cast<double>(mid / deg)) + "° (不翻号会得 175°)");
+{ STEP("[F10] Slerp 短弧: 0°→350° 中点 = 5° (不翻号会得 175°)");
+    EXPECT_LE(static_cast<double>(std::fabs(mid - want)), 1e-4); }
+
     }
 
     // 端点同向 (d>0.9995) 走退化分支也不出 NaN
     {
         const Q q = QY(T(1.0));
         const Q r = Slerp(q, q * T(1.0000001), T(0.5));
-        ck.check(std::isfinite(static_cast<double>(r.w)) && std::fabs(r.Norm() - T(1)) <= tol,
-                 std::string("[F11] ") + tag + " Slerp 近同向 (d>0.9995) 退化 nlerp, 无 NaN");
+{ STEP("[F11] Slerp 近同向 (d>0.9995) 退化 nlerp, 无 NaN");
+    EXPECT_TRUE(std::isfinite(static_cast<double>(r.w))); }
+
+        EXPECT_NEAR(static_cast<double>(r.Norm()), 1.0, static_cast<double>(tol));
     }
 
     // ---- Nlerp ----
-    ck.check(SameQ(Nlerp(a, b, T(0)), a.Normalize(), tol),
-             std::string("[F12] ") + tag + " Nlerp t=0 => q0");
-    ck.check(SameRotation(Nlerp(a, b, T(1)), b, tol),
-             std::string("[F13] ") + tag + " Nlerp t=1 => q1");
-    ck.check(std::fabs(Nlerp(a, b, T(0.37)).Norm() - T(1)) <= tol,
-             std::string("[F14] ") + tag + " Nlerp 结果单位长");
+    CHECK_TRUE("[F12] Nlerp t=0 => q0", SameQ(Nlerp(a, b, T(0)), a.Normalize(), tol));
+    CHECK_TRUE("[F13] Nlerp t=1 => q1", SameRotation(Nlerp(a, b, T(1)), b, tol));
+{ STEP("[F14] Nlerp 结果单位长");
+    EXPECT_NEAR(static_cast<double>(Nlerp(a, b, T(0.37)).Norm()), 1.0,
+    static_cast<double>(tol)); }
+
 
     // Nlerp 短弧翻号: q1 = -q0 时若不翻号, (1-t)q0 + t·q1 在 t=0.5 处为零向量
     // => Normalize 抛 domain_error。这条专抓 Nlerp 漏翻号。
@@ -563,8 +579,10 @@ void TestAngleAndInterp(Checker& ck, const char* tag)
         } catch (...) {
             ok = false;
         }
-        ck.check(ok && SameRotation(mid, q0, T(1e-4)),
-                 std::string("[F15] ") + tag + " Nlerp(q, -q) 不爆 (短弧翻号必需)");
+{ STEP("[F15] Nlerp(q, -q) 不爆 (短弧翻号必需)");
+    EXPECT_TRUE(ok) << "抛异常了: 说明 Nlerp 没做短弧翻号"; }
+
+        if (ok) EXPECT_TRUE(SameRotation(mid, q0, T(1e-4)));
     }
 
     // Nlerp **不匀速** —— 断言它不匀, 防止以后有人"优化"掉 Slerp。
@@ -581,84 +599,50 @@ void TestAngleAndInterp(Checker& ck, const char* tag)
             if (ang > dmax) dmax = ang;
             prev = cur;
         }
-        ck.check(dmax - dmin > T(1e-6),
-                 std::string("[F16] ") + tag + " Nlerp 确实不匀速 (ptp = "
-                     + std::to_string(static_cast<double>(dmax - dmin)) + " > 1e-6)");
+{ STEP("[F16] Nlerp 确实不匀速 (ptp > 1e-6)");
+    EXPECT_GT(static_cast<double>(dmax - dmin), 1e-6); }
+
     }
 }
 
 // ---- [G] 契约: 三类错误必须 throw -----------------------------------------
+//
+// 这里比老写法更严: 老写法 catch (const domain_error&) 会放过派生类,
+// 现在判**精确类型** (见 demo/common.hpp 头注释)。
 
-template <typename T>
-void TestContract(Checker& ck, const char* tag)
+TYPED_TEST(QuaternionTest, Contract)
 {
+    using T = TypeParam;
     using Q = Quaternion<T>;
     const Q zero(T(0), T(0), T(0), T(0));
 
     // 零四元数求逆 / 归一化 -> domain_error (数学上无定义, 不是参数错)
-    ck.check(ThrowsDomainError([&] { (void)zero.Inverse(); }),
-             std::string("[G1] ") + tag + " 零四元数 Inverse => domain_error");
-    ck.check(ThrowsDomainError([&] { (void)zero.Normalize(); }),
-             std::string("[G2] ") + tag + " 零四元数 Normalize => domain_error");
+{ STEP("[G1] 零四元数 Inverse => domain_error");
+    EXPECT_EXACT_THROW((void)zero.Inverse(), std::domain_error); }
+
+{ STEP("[G2] 零四元数 Normalize => domain_error");
+    EXPECT_EXACT_THROW((void)zero.Normalize(), std::domain_error); }
+
 
     // 零轴 -> invalid_argument (参数非法)
-    ck.check(ThrowsInvalidArgument([&] { (void)Q::FromAxisAngle(T(0), T(0), T(0), T(1)); }),
-             std::string("[G3] ") + tag + " FromAxisAngle 零轴 => invalid_argument");
+{ STEP("[G3] FromAxisAngle 零轴 => invalid_argument");
+    EXPECT_EXACT_THROW((void)Q::FromAxisAngle(T(0), T(0), T(0), T(1)),
+    std::invalid_argument); }
+
 
     // 非 3x3 -> invalid_argument
-    ck.check(ThrowsInvalidArgument([&] { (void)Q::FromMatrix(Matrix<T>(2, 2)); }),
-             std::string("[G4] ") + tag + " FromMatrix 非 3x3 => invalid_argument");
-    ck.check(ThrowsInvalidArgument([&] { (void)Q::FromMatrix(Matrix<T>(3, 1)); }),
-             std::string("[G5] ") + tag + " FromMatrix 3x1 => invalid_argument");
+{ STEP("[G4] FromMatrix 非 3x3 => invalid_argument");
+    EXPECT_EXACT_THROW((void)Q::FromMatrix(Matrix<T>(2, 2)), std::invalid_argument); }
+
+{ STEP("[G5] FromMatrix 3x1 => invalid_argument");
+    EXPECT_EXACT_THROW((void)Q::FromMatrix(Matrix<T>(3, 1)), std::invalid_argument); }
+
 
     // Rotate 非 3x1 -> invalid_argument (列向量口径, D19)
-    ck.check(ThrowsInvalidArgument([&] {
-                 (void)Q::Identity().Rotate(Matrix<T>(3, 3));
-             }),
-             std::string("[G6] ") + tag + " Rotate 传 3x3 => invalid_argument");
-    ck.check(ThrowsInvalidArgument([&] {
-                 (void)Q::Identity().Rotate(Matrix<T>(1, 3));
-             }),
-             std::string("[G7] ") + tag + " Rotate 传 1x3 行向量 => invalid_argument");
-}
+{ STEP("[G6] Rotate 传 3x3 => invalid_argument");
+    EXPECT_EXACT_THROW((void)Q::Identity().Rotate(Matrix<T>(3, 3)), std::invalid_argument); }
 
-// ---- main -----------------------------------------------------------------
+{ STEP("[G7] Rotate 传 1x3 行向量 => invalid_argument");
+    EXPECT_EXACT_THROW((void)Q::Identity().Rotate(Matrix<T>(1, 3)), std::invalid_argument); }
 
-int main()
-{
-    std::printf("== 四元数 (B1 / V2.5 / V2.6) ==\n");
-    std::printf("   ① 基本代数 ② 共轭范数逆 ③ 轴角与矩阵互转 ④ 角度与插值\n");
-    std::printf("   分域: double 与 float 各跑一遍 (3.3 第 1 条)\n");
-
-    Checker ck;
-
-    std::printf("\n-- [A] ① 基本代数 --\n");
-    TestAlgebra<double>(ck, "double");
-    TestAlgebra<float>(ck, "float ");
-
-    std::printf("\n-- [B] ② 共轭 / 范数 / IsZero --\n");
-    TestConjugateNorm<double>(ck, "double");
-    TestConjugateNorm<float>(ck, "float ");
-
-    std::printf("\n-- [C] ① Hamilton 积 --\n");
-    TestHamilton<double>(ck, "double");
-    TestHamilton<float>(ck, "float ");
-
-    std::printf("\n-- [D] ② 逆与归一化 (左右逆都测) --\n");
-    TestInverseNormalize<double>(ck, "double");
-    TestInverseNormalize<float>(ck, "float ");
-
-    std::printf("\n-- [E] ③ 轴角与矩阵互转 + Rotate --\n");
-    TestAxisAngleMatrix<double>(ck, "double");
-    TestAxisAngleMatrix<float>(ck, "float ");
-
-    std::printf("\n-- [F] ④ 角度与插值 --\n");
-    TestAngleAndInterp<double>(ck, "double");
-    TestAngleAndInterp<float>(ck, "float ");
-
-    std::printf("\n-- [G] 契约 (错误类型三分) --\n");
-    TestContract<double>(ck, "double");
-    TestContract<float>(ck, "float ");
-
-    return CheckReport(ck.ok, ck.fail, "quaternion");
 }
