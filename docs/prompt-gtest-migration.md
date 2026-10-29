@@ -17,9 +17,12 @@
 - `/Users/apple/develop/learning/graphics/demo/core/scalar_traits.cpp` —— 单域 `TEST` 的样板（11 条 `static_assert` 留在文件作用域）
 - `/Users/apple/develop/learning/graphics/demo/gtest_common.hpp` —— 断言适配层，**只准通过它判异常类型**
 
-## 待迁移清单（14 个文件 / 约 1048 条断言）
+## 待迁移清单（12 个文件；`solve` / `expm` 已迁完）
 
 数字是**迁移前** `./graphics/run_tests.sh -d` 报的断言数，用来核对「一条没丢」。迁移后 `-d` 会改报「用例 N 个」，**不能拿它直接比**。
+
+> **开工前先跑一次** `grep -rn graphics_add_gtest graphics/demo/*/CMakeLists.txt` 看当前真实进度 ——
+> 这个仓可能有别的 agent 同时在迁，本表可能已经过期。
 
 | 文件 | 行数 | 断言数 | 备注 |
 |---|---:|---:|---|
@@ -28,8 +31,8 @@
 | `demo/linalg/eigen.cpp` | 247 | 119 | |
 | `demo/linalg/svd.cpp` | 299 | 266 | 断言最多的一份 |
 | `demo/linalg/qr.cpp` | 251 | 189 | |
-| `demo/linalg/solve.cpp` | 293 | 34 | |
-| `demo/linalg/expm.cpp` | 299 | 25 | |
+| ~~`demo/linalg/solve.cpp`~~ | 293 | 34 | ✅ 已迁（另一 agent，2026-10-30） |
+| ~~`demo/linalg/expm.cpp`~~ | 299 | 25 | ✅ 已迁（另一 agent，2026-10-30） |
 | `demo/linalg/so3.cpp` | 367 | 51 | **有一处已知盲区**：`Hat³` 恒等式抓不到整体翻号，见文件头 |
 | `demo/linalg/dual_complex.cpp` | 319 | 22 | 双域（实/复 × Dual） |
 | `demo/linalg/smoke.cpp` | 353 | 56 | **特殊**：`[A]` 段用「取函数指针、刻意不调用」强制实例化，这个手法必须原样保留，不许改成 `TYPED_TEST` |
@@ -51,9 +54,20 @@
 
 ## 硬规则（违反任何一条即视为未完成）
 
-1. **一个文件只准用一种框架。** 迁完必须把该子目录 `CMakeLists.txt` 里的
-   `graphics_add_legacy_test(<名>)` 改成 `graphics_add_gtest(<名>)`。
+1. **一个文件只准用一种框架。** 迁完必须改该子目录 `CMakeLists.txt` 的注册行。
    两种混在同一文件里 = 两套输出 + `-d` 统计失真。
+
+   **注册行现在有三种形态，都要认**（2026-10-30 实测：`linalg/` 里三种并存）：
+
+   | 现状 | 你要做的 |
+   |---|---|
+   | `graphics_add_legacy_test(<名>)` | 换成 `graphics_add_gtest(<名>)` |
+   | **原始四行块**（`add_executable` + `target_include_directories` + `add_test`） | **整块删掉**，换成一行 `graphics_add_gtest(<名>)` |
+   | 已经是 `graphics_add_gtest(<名>)` | 不用动（可能已被别的 agent 迁过，见下） |
+
+   **⚠ 编辑 `CMakeLists.txt` 前必须重新读一遍当前内容。** 这个仓可能同时有多个 agent 在迁移
+   不同文件，而 `linalg/CMakeLists.txt` 是所有人共用的一个文件 ——
+   凭记忆改会覆盖掉别人刚加的行。改完 `git diff <该文件>` 确认只动了你自己那一块。
 2. **判据一条都不许删、不许合并、不许放宽阈值。** 原文件写 `1e-6` 就还是 `1e-6`。
    如果你认为某个阈值不对，**停下来写进报告**，不要自己改。
 3. **判据编号必须保留**（`[A1]`、`[G3]`…）。用 `SCOPED_TRACE("[A1] …")` 携带，
@@ -102,7 +116,9 @@
 1. **记录基线**：`./graphics/run_tests.sh -d`，抄下该文件的断言数（用上面的表核对）。
 2. **通读**目标文件头部注释，把「判据边界表」和「已知盲区」记下来 —— 第 8 步要用。
 3. **改写**，按上面的映射表与硬规则。
-4. **改 CMakeLists**：`graphics_add_legacy_test` → `graphics_add_gtest`。
+4. **改 CMakeLists**（先重读一遍当前内容，别凭记忆）：把该用例的注册改/换成
+   `graphics_add_gtest(<名>)`，形态见硬规则 1 的三种情况表。改完 `git diff` 确认
+   只动了你这一块，没有碰别人刚加的行。
 5. **构建 + 跑**：`./graphics/run_tests.sh`，必须 **17/17**。
 6. **开告警复查**：`./graphics/run_tests.sh -w -c`，必须 **0 告警**。
 7. **核对判据没丢**：数新文件里的 `EXPECT_*` / `CHECK_*` 条数，**必须 >= 基线断言数**
