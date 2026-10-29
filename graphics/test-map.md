@@ -298,6 +298,18 @@
 | `scalar_traits` | 0 | — | **gtest**（2026-10-30） |
 | `solve` | 0 | 4 处 `throw` 全有 `[E] Contract` 覆盖（2 `runtime_error` + 2 `invalid_argument`） | **gtest**（2026-10-30） |
 | `expm` | 0 | ⚠️ `expm_pade` 的 2 处 `invalid_argument`（非方阵 / 空矩阵，`expm.hpp:133,136`）**无契约判据** —— 覆盖率实测唯一的两行 0 命中，属「契约用例缺一条」 | **gtest**（2026-10-30） |
+| `inverse` | 0 | ⚠️ `diagonal_inverse` 近奇异 throw（`inverse.hpp:183`）+ `RigidTransform`/`Projection`/兜底 三处 `logic_error`（249/250/252）**无判据** | **gtest**（2026-10-30） |
+| `cholesky` | 0 | 8 处 `throw` 全有 `[H] Contract` 覆盖 | **gtest**（2026-10-30） |
+| `eigen` | 0 | ⚠️ `eig_symmetric` 的非方阵/空矩阵（139/142）与 **Jacobi 迭代上限**（216）无判据；`eig` 的非对称 `logic_error` 有 `[E]` | **gtest**（2026-10-30） |
+| `svd` | 0 | ⚠️ 正交补补不出基（`svd.hpp:111` 内部错误 `runtime_error`）无判据；空矩阵两入口有 `[F]` | **gtest**（2026-10-30） |
+| `qr` | 0 | 三个入口的空矩阵 / m<n **都有** `[E]`；⚠️ 内部 `QR: 无法补出正交方向`（138）无判据 | **gtest**（2026-10-30） |
+| `dual_complex` | 0 | 不直接判 `throw`（走 `solve` 的约定，`[F]` 各一条 `invalid_argument` / `runtime_error`） | **gtest**（2026-10-30） |
+| `so3` | 0 | 5 处形状 `invalid_argument` 全有 `[G1]`–`[G5]` | **gtest**（2026-10-30） |
+| `smoke` | 0 | 无 `throw` 判据（它是闸门）；`[B6e]` 借 `qr_inverse` 的零矩阵奇异 | **gtest**（2026-10-30） |
+| `compute_graph` | 0 | 未实现的 `GradOp` 在本用例里不出现（占位归 `backward`） | **gtest**（2026-10-30） |
+| `apply` | 0 | `[F1]`/`[F2]` 形状 `invalid_argument` + `[F3]` 1×1 广播不抛 | **gtest**（2026-10-30） |
+| `backward` | 0 | `[E1]`/`[E1b]`/`[E2]`/`[E3]` 钉住 `CWisePow`/`Inverse`/`Sigmoid` 的占位 throw 与 arity 守卫 | **gtest**（2026-10-30） |
+| `jacobian` | 0 | `[G1]`–`[G4]` 覆盖行向量/输出非列/谎报 m/`Apply` 形状；⚠️ **3 参数版**的 x 非列与 m<0（243/247）无判据 | **gtest**（2026-10-30） |
 
 **占位的语义是「如实钉住不可用」**，不是「测过了」。
 **统计覆盖率时 `tensor` 这一块必须单列**，不能算进「已实现」——
