@@ -62,12 +62,10 @@
 //   形成不必要的依赖链。见 numeric-contract.md §4。
 // ===========================================================================
 
-#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
-#include "core/common.hpp"
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
 

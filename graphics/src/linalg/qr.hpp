@@ -68,7 +68,6 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "core/common.hpp"
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
 #include "linalg/operator.hpp"

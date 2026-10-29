@@ -3,12 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
-#include <string>
 #include <vector>
-#include "core/common.hpp"
 #include "core/matrix.hpp"
 #include "core/scalar.hpp"
-#include "core/complex.hpp"
 #include "linalg/eigen.hpp"   // eig_symmetric: A^H·A 是 Hermitian, 直接走这一支
 
 // ===========================================================================
