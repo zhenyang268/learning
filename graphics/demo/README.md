@@ -359,7 +359,9 @@ n_bad="$(printf '%s\n' "$out" | grep -c '\[FAIL\]')"
 
 | 入口 | 跑什么 | 什么时候用 |
 |---|---|---|
+| `./graphics/scripts/fetch_deps.sh` | 下载/校验 C++ 依赖 + 装 Python 工具 | **新机器第一次**，或 `cmake` 报「找不到 googletest」 |
 | `./graphics/run_tests.sh` | **配置 + 构建 + 全部 17 个 ctest** | 每次改完 `src/` 或 `demo/`，**收工前必跑** |
+| `./graphics/run_tests.sh --coverage` | 同上 + gcovr 报告（见 §5.6） | 想知道「哪些行从没被执行过」 |
 | `./graphics/run_apps.sh <name>` | 构建 + 跑一个 app（`demo/apps/`） | 只想看现象 |
 | `./graphics/build/demo/<模块>/<名>` | 直接跑单个用例，**不重新构建** | 已知只改了一个用例，想反复看明细 |
 
@@ -374,13 +376,14 @@ n_bad="$(printf '%s\n' "$out" | grep -c '\[FAIL\]')"
 | 选项 | 作用 |
 |---|---|
 | （无参） | 增量构建 + 跑全部 |
-| **`-d`** | 跑完再逐用例打印「检查 N 项 (FAIL M)」+ 末行。**定位时最常用** |
+| **`-d`** | 跑完再逐用例打印统计 + 末行。**定位时最常用**。注意两套框架数的不是一回事：老用例显示「**断言** N 项」，gtest 显示「**用例** N 个」，**两列不可横比**（见 §5.7） |
 | `-c` | 删掉构建目录从零构建（怀疑缓存时用） |
 | `-w` | 开 `-Wall -Wextra`。**查"编得过但不对劲"时用** |
 | `-j 4` | 并行度（默认本机核数） |
 | `-b /tmp/gb` | 换构建目录 |
 | `-l` | 只列出已注册用例，不构建不跑（**查"用例注册上了没"**） |
 | `--build-only` / `--test-only` | 只构建 / 只跑测试 |
+| **`--coverage`** | 插桩构建 + 跑测试 + 出 gcovr 报告；构建目录默认 `build-cov` |
 
 **`run_apps.sh`**：`<name>` 构建并跑；`<name> -c` 从零；`<name> -- 3 7` 把参数透传给 app。
 
@@ -433,6 +436,64 @@ n_bad="$(printf '%s\n' "$out" | grep -c '\[FAIL\]')"
 2. **`demo/CMakeLists.txt` 没 `add_subdirectory(<新目录>)`**
 3. **改了 `CMakeLists.txt` 但没重新配置** —— `run_tests.sh` 会配置，但如果直接
    `cmake --build` 就不会。用 `run_tests.sh -c` 彻底重来
+
+### 5.6 覆盖率：看「未解释行」，不看百分比
+
+```bash
+./graphics/run_tests.sh --coverage      # 构建目录默认换成 build-cov，不污染日常构建
+```
+
+**分母只算 `src/`**（`demo/` 是判据本身，算进去等于把"测试写了多少行"当覆盖率）。
+
+**这个百分比不是质量指标。** 模板未实例化的分支天然是 0%，`--coverage` 下
+分支覆盖率长期在 35% 上下，不代表库只测了三分之一。正确用法只有一种：
+
+> **每一行未覆盖，必须能说出属于下面三类中的哪一类；说不出来就是缺判据。**
+
+| 未执行的原因 | 合法？ | 处理 |
+|---|---|---|
+| 模板分支未被任何域实例化 | 合法，但**必须登记** | 进 `../test-map.md` 的「未实例化清单」，与 §4.1 闸门漏项同一张表 |
+| 契约性 throw（正常路径不该触发） | 合法 | 应被 `[G]` 段的 `EXPECT_EXACT_THROW` 覆盖；覆盖不到 = 契约用例缺一条 |
+| 死代码 / 到不了的防御分支 | **不合法** | 删掉，或补一条注入对照证明它可达 |
+
+2026-10-30 首次实测（`-O0 -fno-inline --coverage`，AppleClang 17 + gcovr 8.8）：
+行 **79.2%**、分支 35.7%、函数 89.8%。**这三个数只作基线，不作目标。**
+
+工具链：`gcov`（系统自带）+ `gcovr`（`./graphics/scripts/fetch_deps.sh` 装）。
+若 gcovr 报解析错误，多半是 AppleClang 的 `.gcda` 与 `gcov` 版本不匹配 —— 见该脚本头注释。
+
+**`--coverage` 默认从零重建 `build-cov`，不要关掉这个行为。**
+`.gcda` 会跨次累积，被测代码或框架变过之后再复用旧目录，数字会**静默失真**：
+2026-10-30 把 `quaternion.cpp` 从老框架迁到 gtest 之后，增量跑出来的
+`src/quat/quaternion.hpp` 覆盖率是 **5%**，而从零重建是 **96%**。
+假的低值会让人去补根本不缺的判据 —— 比没有覆盖率更贵。
+（想增量跑就显式 `-b <dir>`，此时口径由你负责。）
+
+### 5.7 两套框架并存：gtest 与老 Checker
+
+2026-10-30 起 `demo/` 里两种写法共存，**一个文件只准用其中一种**：
+
+| 写法 | 注册函数 | 长什么样 |
+|---|---|---|
+| gtest | `graphics_add_gtest(<名>)` | `TEST()` / `TYPED_TEST()`，**不写 `main`** |
+| 老写法 | `graphics_add_legacy_test(<名>)` | 自己带 `main` + `Checker` 计分板 |
+
+迁移期规矩（不是为了整洁，是为了不把牙拔掉）：
+
+1. **逐文件迁移**。每迁完一个，必须把它在**「判据边界表」里记的注入对照重跑一遍**，
+   确认新框架仍抓得住同一个 bug，再动下一个。抓不住就地回退 ——
+   迁完不验，等于用「看起来是测试」换掉「真的能抓错」。
+2. **不许 `FetchContent`**。依赖预下载（`graphics/scripts/fetch_deps.sh` +
+   `graphics/deps.manifest` 里 pin 的 sha256）。构建期联网 ⇒ 不可复现。
+3. **异常判据只用 `EXPECT_EXACT_THROW`**（在 `gtest_common.hpp`）。
+   直接写 `EXPECT_THROW(stmt, std::logic_error)` 会被 `invalid_argument` /
+   `out_of_range` 冒充 —— 那是假绿。
+4. **`tensor.cpp` 不单独迁移**。它的 24 条 `[P]` 是「断言仍 throw」的占位，
+   先迁到 gtest 再实现等于写两遍 —— 迁移与实现合并做。
+
+**`-d` 明细模式两套都认**：`run_tests.sh` 第 5 段用正则同时匹配
+`[OK]`（老）与 `[       OK ]`（gtest，带空格填充）。只写 `\[OK\]` 会让 gtest 用例
+恒为「检查 0 项」且**不报错** —— 这是静默失效，与 `smoke` 漏登记同类。
 
 ---
 

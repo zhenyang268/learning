@@ -150,5 +150,30 @@ Matrix<Dual<T>> LocalDeriv(const Matrix<Dual<T>>& A, FunctionType f) {
   用 `grep -E "a|b"` 或 Grep 工具。
 - **本环境实测更怪：`grep -n "pattern" <单个文件>` 也会偶发零命中**（同一 pattern 换 `rg` 立刻命中）。
   ⇒ **判"内容是否存在"不要只信一次 grep**，尤其是拿它做验收时（会得出反向结论）。
-- **`grep '检查'` 会漏用例**：`scalar_traits` 与 `compute_graph` 用手写 `printf`（`got=/want=` 格式），
-  不打印「检查 N 项」⇒ 统计判据数必须 `grep -c '\[OK\]'`。
+- **`grep '检查'` 会漏用例**：`compute_graph` 等老用例用手写 `printf`（`got=/want=` 格式），
+  不打印「检查 N 项」⇒ 统计判据数要数 `[OK]` 标记，不能数「检查」。
+  2026-10-30 起 `scalar_traits` / `quaternion` 已迁到 gtest，其输出是
+  `[       OK ] Suite.Test`（**带空格填充**）—— `grep -c '\[OK\]'` 对它们恒为 0，
+  且不报错。`run_tests.sh -d` 已改成同时匹配两种格式；**自己写统计脚本时必须照抄那个正则**。
+
+## 十二、工具链与脚本的三个新坑（2026-10-30，写依赖脚本与覆盖率时踩的）
+
+- **`$VAR` 紧跟全角标点会把标点吞进变量名**。`step "依赖（$THIRD_PARTY）"` 里
+  bash 把 `THIRD_PARTY` + `）` 当成一个变量名 ⇒ `unbound variable`，报错信息里的变量名
+  末尾带乱码字节。本仓中文注释密集，**`$VAR` 后面跟 `）`「」，：` 一律写成 `${VAR}`**。
+- **`cmd | tail` 会把退出码换成 `tail` 的**。用 `set -o pipefail` 或
+  `cmd > log 2>&1; echo "EXIT=$?"; tail log`。写依赖脚本时第一次就是被这个骗过去的
+  （脚本明明失败，命令返回 0）。
+- **检索工具的假零命中有两个来源**（2026-10-30 实测）：
+  ① 把**文件路径**当搜索根（而非目录）时可能报 0 命中，实际文件里有；
+  ② glob 写 `tensor.hpp` 匹配不到 `src/core/tensor.hpp`，要写 `*.hpp` 让它按 basename 匹配。
+  ⇒ 判「某内容不存在」必须换 目录 + 宽 glob 复查一次，否则会得出反向结论。
+- **gtest 的 `SCOPED_TRACE` 在 `do{}while` 外的生命周期是整个块**。写成
+  `STEP("x"); EXPECT_TRUE(...);` 时标签会**累积**：第 N 条断言失败会打印前 N-1 条标签。
+  必须让标签与断言处在同一个块内（`{ STEP(...); EXPECT_...; }`）。
+- **覆盖率复用旧构建目录会给出「静默失真」的数字**。`.gcda` 跨次累积，
+  被测代码或测试框架变过之后再增量跑，gcovr 会算出错误的低值：
+  2026-10-30 把 `quaternion.cpp` 迁到 gtest 后，增量跑得
+  `src/quat/quaternion.hpp` = **5%**，`--coverage -c` 从零重建 = **96%**。
+  **假低值比没有覆盖率更贵**——它会让人去补根本不缺的判据。
+  ⇒ `run_tests.sh --coverage` 已默认强制重建 `build-cov`，别关掉。

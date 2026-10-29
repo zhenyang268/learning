@@ -1,4 +1,4 @@
-# linalg 层验收 (plan.md V1.1–V1.5) —— 每个用例对应一个交付判据
+# linalg 层验收 —— 每个用例对应一个交付判据
 # 公共测试工具在 demo/common.hpp
 add_executable(solve solve.cpp)
 target_include_directories(solve PRIVATE
@@ -42,7 +42,7 @@ target_include_directories(dual_complex PRIVATE
 )
 add_test(NAME dual_complex COMMAND dual_complex)
 
-# V1.6 指数映射 (lie-plan 刀 1/2/3 + 超强判据)
+# 指数映射 (expm: exp 非单射 / SU(2) 双覆盖 / BCH 测阶 三刀 + 超强判据)
 add_executable(expm expm.cpp)
 target_include_directories(expm PRIVATE
     ${GRAPHICS_SRC_DIR}
@@ -56,8 +56,8 @@ target_include_directories(so3 PRIVATE
 )
 add_test(NAME so3 COMMAND so3)
 
-# V1.1 显式闸门: 同一份 linalg 源码 x {double, Complex} 的**全入口实例化**烟测
-# (不是数值验收 —— 数值归 V1.2-V1.6; 这里判"每个公开入口都真的进过编译器")
+# 显式闸门: 同一份 linalg 源码 x {double, Complex} 的**全入口实例化**烟测
+# (不是数值验收 —— 数值判据在各算法用例; 这里判"每个公开入口都真的进过编译器")
 add_executable(smoke smoke.cpp)
 target_include_directories(smoke PRIVATE
     ${GRAPHICS_SRC_DIR}

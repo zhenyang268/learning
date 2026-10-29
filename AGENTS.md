@@ -125,12 +125,15 @@
 
 ```bash
 uv sync                                     # 安装/同步 Python 依赖
-uv run pytest                               # Python 测试
+uv run pytest                               # Python 测试（testpaths 限死在 pyapps/tests）
+./graphics/scripts/fetch_deps.sh            # C++ 第三方依赖预下载（gtest）+ Python 工具（gcovr）
+                                            #   --verify 只校验 | --force 重下 | --clean 清理
 cmake -S graphics -B graphics/build -DCMAKE_BUILD_TYPE=Debug
 cmake --build graphics/build -j             # 构建 C++ 库与 demo
 ctest --test-dir graphics/build --output-on-failure   # 跑 C++ 测试
 ./graphics/run_tests.sh                     # C++ 测试一键入口(配置+构建+ctest)
-                                            #   -c 从零构建 | -d 打各用例内部明细 | -w 开 -Wall -Wextra | -h 帮助
+                                            #   -c 从零构建 | -d 打各用例内部明细 | -w 开 -Wall -Wextra
+                                            #   --coverage 出 gcovr 报告(分母只算 src/) | -h 帮助
 latexmk -pdfxe -interaction=nonstopmode main.tex   # 编译笔记（在 math-notebook/ 下执行；引擎坑见 §七）
 bl image generate --model qwen-image-3.0-pro --watermark false --size "2048*2048"
 ```

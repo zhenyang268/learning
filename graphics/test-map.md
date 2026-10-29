@@ -291,13 +291,23 @@
 
 ### 4.3 占位覆盖（`[P]` 段）
 
-| 用例 | 占位项数 | 对应 `src` 的 throw 数 |
-|---|---:|---|
-| `tensor` | 24 | 51 处 `throw` |
-| `quaternion` | 剩余 10 个入口 | 10 处 `throw std::logic_error` |
+| 用例 | 占位项数 | 对应 `src` 的 `throw` 语句 | 框架 |
+|---|---:|---|---|
+| `tensor` | 24（`[P1]`–`[P24]`）+ `[G]` 8 条已写好但未注册 | 35 处 `throw std::...` | legacy |
+| `quaternion` | **0**（2026-10-29 已全部落地，160 项判据） | 剩 5 处全是契约性：2 处 `domain_error` + 3 处 `invalid_argument` | **gtest**（2026-10-30） |
+| `scalar_traits` | 0 | — | **gtest**（2026-10-30） |
 
 **占位的语义是「如实钉住不可用」**，不是「测过了」。
-**统计覆盖率时这两块必须单列**，不能算进「已实现」。
+**统计覆盖率时 `tensor` 这一块必须单列**，不能算进「已实现」——
+它使 `ctest 17/17` 的有效覆盖实为 **16/17**。
+
+**计数口径（2026-10-30 定）**：只数 `throw` **语句**（行首 `throw std::`），**不数注释里出现的字样**。
+含注释的计数会把 `tensor.hpp` 数成 55（该文件注释大量讨论 throw 的类型约定），
+这正是同一事实先后写出 51 / 55 / 62 三个数的原因。可复现命令：
+
+```
+uv run python -c "import re;s=open('graphics/src/core/tensor.hpp',encoding='utf-8').read();print(len(re.findall(r'(?m)^\s*throw\s+std::',s)))"
+```
 
 ### 4.4 完全无代码的模块（无 ctest，因为无实现）
 

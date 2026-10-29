@@ -1,6 +1,6 @@
 # dev-progress.md — 进度总览
 
-> **读者**：人 + agent ｜ **最后更新**：2026-10-29 ｜ **本文是「进度」的总览**
+> **读者**：人 + agent ｜ **最后更新**：2026-10-30 ｜ **本文是「进度」的总览**
 >
 > **真源声明（2026-10-26 拆分后）**
 > - 本文只回答**「整体现在大致在哪」**（§0 现状表）+ Gate 门槛（§2）+ 里程碑（§5）。
@@ -23,7 +23,7 @@
 | 线 | 现状（只写既成事实） |
 |---|---|
 | **数学** | 段 0（测度与积分）在推进。路线（十段 / 看懂线 / 边界）→ `docs/route-math.md`；明细日志 → `docs/math-log.md` |
-| **工程** | `graphics` HEAD `129b8cd`，ctest **17/17**。`tensor` 的 24 条判据仍是"断言 throw"占位（文件里 **51 处 `throw`**）；`quat` **已全部落地**（9 个入口无占位，剩 5 处 `throw` 全是契约性：2 处 `domain_error` + 3 处 `invalid_argument`），验收 **160 项**。**`src/math/` 目录不存在**（`ode.hpp` 未建）。**2026-10-28 核实：`/tmp/tensor.full.{hpp,cpp}` 与 `.wip-tensor/` 均已空 —— 该 887 行备份已于 10-25 按用户指示删除，实现张量须从零，勿再找** |
+| **工程** | `graphics` HEAD `742099d`，ctest **17/17**（其中 `tensor` 一项是 24 条占位判据「如实钉住仍不可用」⇒ **有效覆盖 16/17**）。**测试基础设施 2026-10-30 换代**：依赖走 `graphics/deps.manifest` + `scripts/fetch_deps.sh`（gtest 1.15.2，pin sha256）；用例注册分 `graphics_add_gtest` / `graphics_add_legacy_test` 两套，**已迁移 2/17**（`scalar_traits`、`quaternion`，后者用 `TYPED_TEST` 保 double/float 双域）；覆盖率走 `./graphics/run_tests.sh --coverage`（gcovr，分母只算 `src/`，首次实测行 **79.2%** / 分支 35.7%）；Python 侧 `uv run pytest` 有 3 条 RK4 数值判据（`pyapps/tests/`）。`tensor` 的 24 条判据仍是"断言 throw"占位（文件里 `throw` 语句 **35 处**、`待实现` 63 处，2026-10-30 实测，只数语句不数注释）；`quat` **已全部落地**（9 个入口无占位，剩 5 处 `throw` 全是契约性：2 处 `domain_error` + 3 处 `invalid_argument`），验收 **160 项**。**`src/math/` 目录不存在**（`ode.hpp` 未建）。**2026-10-28 核实：`/tmp/tensor.full.{hpp,cpp}` 与 `.wip-tensor/` 均已空 —— 该 887 行备份已于 10-25 按用户指示删除，实现张量须从零，勿再找** |
 | **pyapps** | G1–G6（球面）+ R1–R6（旋转）十二脚本已落地、复跑通过，图 13 张 → `learning-todo/imgs/{geo,rot}/` |
 | **笔记** | `math-notebook/main.pdf` 112 页；编译必须 `-pdfxe`（`-pdf` 会卡在交互输入） |
 | **笔记 web 化** | 已完成（318/318，2026-10-04 收工），不再推进 |
@@ -32,13 +32,14 @@
 
 > **已删除（2026-10-26）**：`graphics/plan.md`、`learning-todo/{math-plan,fan-plan,lie-plan,stage1-wrapup}.md`
 > 连同文档迁走后留下的跳转页，全部删除。内容现在在根 `NOW.md` / `graphics/acceptance.md` /
-> `docs/route-math.md` / `docs/pitfalls.md` / `docs/interview-depth.md`。
+> `docs/route-math.md` / `docs/pitfalls.md` / `docs/interview-map.md`。
+> （`docs/interview-depth.md` 也已于 2026-10-28 并入 `interview-map.md` §5/§6。）
 > `docs/logs/` 里的历史条目仍按旧路径引用 —— **属历史记录，不要修**。
 
 > **2026-09-22 修正**：本表原先写「L1 第 3 关 —— 外测度已学、勒贝格积分刚学」，
-> 与 `ns-progress.md` 的「外测度 / Carathéodory **未接触**」**互相矛盾**。
-> 已改为**只留指针不做重复记录** —— 数学线的关卡状态一律以 `ns-progress.md` 为准。
-> 同日用户确认：**外测度确已学**，滞后的是 `ns-progress.md` 一侧，该文件已一并更新。
+> 与当时数学线日志的「外测度 / Carathéodory **未接触**」**互相矛盾**。
+> 已改为**只留指针不做重复记录** —— 数学线的关卡状态一律以 `docs/math-log.md` 为准。
+> 同日用户确认：**外测度确已学**，滞后的是日志一侧，已一并更新。
 
 **更新方式**：每次会话用户报「学到哪 / 写到哪」→ 改上表 + 在第 6 节日志追加一条。
 上表只保留**当前**状态（覆盖式），历史一律进日志（追加式，不删改）。
@@ -76,20 +77,20 @@
 
 > **⚠️ 2026-10-23 口径更新**：数学路线已改为 `docs/route-math.md` 的**十段表**
 > （原 L0–L5 作废）。**真正的关卡从「L1 完成」挪到「段 5 变分两出口」** ——
-> 那里是「能读教材」与「能读场方程」的分界（math-plan.md §5 冲突 ③）。
+> 那里是「能读教材」与「能读场方程」的分界。
 > 下表按新段号重定义；旧 Gate A/B/C 的数学条件**作废**。
 
-| 门槛 | 数学（按 math-plan 段号） | 工程 | 解锁的小项目 |
+| 门槛 | 数学（按 `docs/route-math.md` 段号） | 工程 | 解锁的小项目 |
 |---|---|---|---|
 | **Gate A** | 段 0（测度积分）+ ODE 数值解直觉（Euler/RK4/Verlet） | matrix 改造 ✔ + 最小 linalg（LU/solve）+ **一个积分器（`ode.hpp`）** | 动力系统可视化：单摆 / 行星轨道 / 双摆 / N 体 |
 | **Gate B** | 段 1–2（概率三件 + L²/傅里叶）+ 段 5 前半（δ 规则、EL） | Gate A + FDM 基础（`pde.hpp`）+ `fourier.hpp` | PDE 可视化：热方程（图像模糊）、波动（鼓膜） |
 | **Gate C** ★真关卡 | **段 5 全程**（两出口 + 边界项 + Noether）+ 段 3–4（泛函/Sobolev） | 阶段 4 完整（`pde.hpp` + 边界条件组装 + CG） | 弱解类（通往 NS / 场方程） |
 | **Gate D** | 段 6–7（流形与张量场、联络与曲率） | `Tensor`/`TensorView` + `Einsum` 薄层 | GR 侧：测地线、曲率、场方程数值 |
 
-> **第一个小项目定在 Gate A**；数学线继续按 `math-plan.md` 推进，不互相阻塞。
+> **第一个小项目定在 Gate A**；数学线继续按 `docs/route-math.md` 的十段推进，不互相阻塞。
 >
 > **共用的「主干五件」**（`ode.hpp` / `pde.hpp` / `fourier.hpp` / `Tensor+Einsum` /
-> `LaplacianMatrix`）是 **CG / GR / NS 三条支线全部共用**的（math-plan.md §7.1）。
+> `LaplacianMatrix`）是 **CG / GR / NS 三条支线全部共用**的。
 > **不是「选一条支线」，而是「把主干修宽」** —— 主干修好，三个终点都能接着长，
 > 任何一支都不浪费。工程排序的唯一判据：**这件东西在不在主干上。**
 
