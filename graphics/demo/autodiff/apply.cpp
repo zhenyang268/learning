@@ -19,6 +19,16 @@
 //   [F] 维度不匹配 -> throw
 //
 // ---------------------------------------------------------------------------
+// 框架: googletest (2026-10-30 迁移)
+// ---------------------------------------------------------------------------
+//   · 老写法的 `main()` + `Checker` 计分板**已删除** (GTest::gtest_main 提供 main)。
+//   · 迁移前 18 项断言 -> 迁移后 18 条 EXPECT/ADD_FAILURE (逐条对应, 一条没合并)。
+//     老写法每条判据内部聚合成一个 bool (**一条断言覆盖 5 函数 x 3 点**),
+//     迁移后保持同样的聚合粒度 —— 不要拆成逐点断言, 那会改判据语义。
+//   · 判据编号 [A1]–[F3] 原样保留, 通过 SCOPED_TRACE 携带。
+//   · 异常判据走 EXPECT_EXACT_THROW / EXPECT_NO_THROW_STMT。
+//
+// ---------------------------------------------------------------------------
 // 本用例覆盖不到的: 偏序守卫的反向证据
 // ---------------------------------------------------------------------------
 // jacobian.hpp 的标量版体内有 `static_assert(!IsDual<T>::value, ...)`。要证明它
@@ -27,12 +37,37 @@
 //   ① 行为型: 把 (2) 的 static_assert 改成 `!!IsDual<T>::value` -> 本用例编不过
 //   ② 编译型: 把 (1) 的签名 `Matrix<Dual<T>>` 误写成 `Matrix<T>` -> 双域调用即报
 //      "static_assert failed: Apply: Dual 域应由 Dual 专用重载接管"
-// (2026-10-16 两条均已人工验证, 见 dev-progress.md §6)
+// (2026-10-16 两条均已人工验证; 2026-10-30 迁移后复验 ①, 仍是编译期失败, 不变。)
+//
+// ---------------------------------------------------------------------------
+// 判据边界表 (格式见 demo/README.md §4.3.1)
+// ---------------------------------------------------------------------------
+//   段 | 阈值                    | 边界 / 病态输入                | 专抓什么错
+//  ----|-------------------------|--------------------------------|--------------------------
+//   A  | 值 1e-15, derive 1e-14  | 4 重载 x {double, Complex, Dual, Dual<Complex>} | 某个域从未被实例化 (编不过)
+//      |                         | 取样点 0.7 / 2.0 / 3.5 (全正)  | Log/Sqrt 在负数上 undefined
+//   B  | 1e-14 (50 组)           | x ∈ [0.25, 2.95] 均匀 10 点     | derive 公式抄错 (如 cos 少负号)
+//   C  | 1e-8 (20 组, h=1e-6)    | 同上 4 点                       | 与 [B] 同错时互相掩盖
+//   D  | 1e-15 / 1e-14           | Function(sin) / MatrixFunction([sin,exp]) / 1x1 退化 | grad_graph 侧漏接 Apply
+//   E  | 1e-15 / 1e-13 / 1e-13   | **嵌套对偶** x0=2, ln 与 x^3        | log 的 ADL 断链 (修过, 编不过)
+//   F  | **异常类型精确到子类**  | 3×1 vs 2×1; **1×1 必须广播不抛**   | "见到非同形就抛"的偷懒实现
+//
+// ---------------------------------------------------------------------------
+// 已知盲区 (注入对照的方案写在这里)
+// ---------------------------------------------------------------------------
+//  ① **[A]/[B]/[C] 的判据全部经 Apply 这一条路** —— 若 `FunctionType::Log` 的实现
+//     被写成 `exp`, [A1]/[A3]/[A5]/[B1]/[C1] 会一起红, 但 [D]/[E] 仍绿
+//     (它们直接调 ln/exp/sin, 不经 Apply 的 switch)。这是"两条路径都要有判据"的理由。
+//  ② **[C] 中心差分与 [B] 解析导数在实现错误时会同时红** —— 它们是独立判据,
+//     却**不独立失效**: 除非实现错得恰好落在差分的截断误差里 (本例不会)。
+//  ③ [F3] 的"1×1 广播"是唯一能抓"偷懒版 throw"的判据: 若实现改成形状不等就抛,
+//     [F1]/[F2] 仍绿, 只有 [F3] 红。
 //
 // 运行: ./graphics/run_tests.sh      (注册名: apply)
 //       ./graphics/build/demo/autodiff/apply
 
-#include "../common.hpp"
+#include "gtest_common.hpp"
+
 #include "autodiff/dual.hpp"
 #include "autodiff/grad_graph.hpp"
 #include "autodiff/jacobian.hpp"
@@ -45,20 +80,21 @@
 #include <string>
 #include <vector>
 
+namespace
+{
+
 using D  = Dual<double>;
 using CD = Dual<Complex<double>>;
 
-static Checker ck;
-
-static const FunctionType kAll[5] = {
+constexpr FunctionType kAll[5] = {
     FunctionType::Sin, FunctionType::Cos, FunctionType::Exp,
     FunctionType::Log, FunctionType::Sqrt
 };
 
 // 取样点: 3 个**正数** —— 5 个函数 (含 Log / Sqrt) 在此都有定义
-static const double kXs[3] = {0.7, 2.0, 3.5};
+constexpr double kXs[3] = {0.7, 2.0, 3.5};
 
-static const char* FName(FunctionType f)
+const char* FName(FunctionType f)
 {
     switch (f) {
         case FunctionType::Sin:  return "sin";
@@ -71,7 +107,7 @@ static const char* FName(FunctionType f)
 }
 
 // 解析值 / 解析导数 —— 判据来源, 与被测实现**完全独立** (走 libc 的 std::*)
-static double AnalyticValue(FunctionType f, double x)
+double AnalyticValue(FunctionType f, double x)
 {
     switch (f) {
         case FunctionType::Sin:  return std::sin(x);
@@ -82,7 +118,7 @@ static double AnalyticValue(FunctionType f, double x)
     }
     return x;
 }
-static double AnalyticDeriv(FunctionType f, double x)
+double AnalyticDeriv(FunctionType f, double x)
 {
     switch (f) {
         case FunctionType::Sin:  return  std::cos(x);
@@ -94,12 +130,15 @@ static double AnalyticDeriv(FunctionType f, double x)
     return 0.0;
 }
 
+}  // namespace
+
+#define STEP(label) SCOPED_TRACE(label)
+
 // ===========================================================================
 // [A] 4 个重载 x 4 个域: 实例化 + 数值
 // ===========================================================================
-static void TestA_AllOverloadsAllDomains()
+TEST(Apply, AllOverloadsAllDomains)
 {
-    std::printf("\n[A] 4 个重载 x {double, Complex, Dual, Dual<Complex>}\n");
     const double tol = 1e-15;
 
     // --- (2) 标量专用: double ---
@@ -113,7 +152,8 @@ static void TestA_AllOverloadsAllDomains()
                 if (std::fabs(B(j, 0) - AnalyticValue(f, kXs[j])) > tol) ok = false;
             }
         }
-        ck.check(ok, std::string("[A1] (2) Matrix<double> x FunctionType, 5 函数 x 3 点"));
+        { STEP("[A1] (2) Matrix<double> x FunctionType, 5 函数 x 3 点");
+          EXPECT_TRUE(ok); }
     }
 
     // --- (4) 标量专用: double + Matrix<FunctionType> (每格不同函数) ---
@@ -126,7 +166,8 @@ static void TestA_AllOverloadsAllDomains()
         bool ok = std::fabs(B(0, 0) - std::sin(0.7)) < tol
                && std::fabs(B(1, 0) - std::exp(2.0)) < tol
                && std::fabs(B(2, 0) - std::log(3.5)) < tol;
-        ck.check(ok, std::string("[A2] (4) Matrix<double> x Matrix<FunctionType> 逐格不同"));
+        { STEP("[A2] (4) Matrix<double> x Matrix<FunctionType> 逐格不同");
+          EXPECT_TRUE(ok); }
     }
 
     // --- (1) Dual 专用: value 与 derive 都要对 ---
@@ -141,7 +182,8 @@ static void TestA_AllOverloadsAllDomains()
                 if (std::fabs(B(j, 0).derive - AnalyticDeriv(f, kXs[j])) > 1e-14) ok = false;
             }
         }
-        ck.check(ok, std::string("[A3] (1) Matrix<Dual<double>> x FunctionType, value+derive"));
+        { STEP("[A3] (1) Matrix<Dual<double>> x FunctionType, value+derive");
+          EXPECT_TRUE(ok); }
     }
 
     // --- (3) Dual 专用 + Matrix<FunctionType> ---
@@ -155,7 +197,8 @@ static void TestA_AllOverloadsAllDomains()
                && std::fabs(B(0, 0).derive - std::cos(0.7)) < 1e-14
                && std::fabs(B(1, 0).value  - std::exp(1.2)) < tol
                && std::fabs(B(1, 0).derive - std::exp(1.2)) < 1e-14;
-        ck.check(ok, std::string("[A4] (3) Matrix<Dual<double>> x Matrix<FunctionType>"));
+        { STEP("[A4] (3) Matrix<Dual<double>> x Matrix<FunctionType>");
+          EXPECT_TRUE(ok); }
     }
 
     // --- (2) 标量专用: Complex< double>, 与 std::complex 对拍 (独立实现) ---
@@ -177,7 +220,8 @@ static void TestA_AllOverloadsAllDomains()
             if (std::fabs(B(0, 0).real - want.real()) > 1e-15) ok = false;
             if (std::fabs(B(0, 0).imag - want.imag()) > 1e-15) ok = false;
         }
-        ck.check(ok, std::string("[A5] (2) Matrix<Complex<double>>, 对拍 std::complex"));
+        { STEP("[A5] (2) Matrix<Complex<double>>, 对拍 std::complex");
+          EXPECT_TRUE(ok); }
     }
 
     // --- (1) Dual 专用: Dual<Complex<double>> ---
@@ -189,16 +233,16 @@ static void TestA_AllOverloadsAllDomains()
         std::complex<double> want = std::sin(z);
         bool ok = std::fabs(B(0, 0).value.real - want.real()) < 1e-15
                && std::fabs(B(0, 0).value.imag - want.imag()) < 1e-15;
-        ck.check(ok, std::string("[A6] (1) Matrix<Dual<Complex<double>>> 走通"));
+        { STEP("[A6] (1) Matrix<Dual<Complex<double>>> 走通");
+          EXPECT_TRUE(ok); }
     }
 }
 
 // ===========================================================================
 // [B] Dual 域 derive vs 解析导数: 权威判据 (上面 [A3] 已含, 这里单列宽覆盖)
 // ===========================================================================
-static void TestB_AnalyticDerivWide()
+TEST(Apply, AnalyticDerivWide)
 {
-    std::printf("\n[B] derive vs 解析导数 (10 点 x 5 函数)\n");
     const int nx = 10;
     bool ok = true;
     double worst = 0.0;
@@ -217,17 +261,18 @@ static void TestB_AnalyticDerivWide()
         }
     }
     for (int k = 0; k < 5; k++)
-        std::printf("     %-5s 最差 |derive - 解析| = %.3e\n", FName(kAll[k]), perF[k]);
-    std::printf("     合计最差 = %.3e\n", worst);
-    ck.check(ok, std::string("[B1] 50 组 (10 点 x 5 函数) 全部 <= 1e-14"));
+        std::printf("[apply] %-5s 最差 |derive - 解析| = %.3e\n", FName(kAll[k]), perF[k]);
+    std::printf("[apply] 合计最差 = %.3e\n", worst);
+
+    { STEP("[B1] 50 组 (10 点 x 5 函数) 全部 <= 1e-14");
+      EXPECT_TRUE(ok) << "合计最差 = " << worst; }
 }
 
 // ===========================================================================
 // [C] Dual 域 derive vs 中心差分: 判据独立于实现路径
 // ===========================================================================
-static void TestC_CentralDifference()
+TEST(Apply, CentralDifference)
 {
-    std::printf("\n[C] derive vs 中心差分 (独立判据)\n");
     const double h = 1e-6;
     bool ok = true;
     double worst = 0.0;
@@ -244,17 +289,17 @@ static void TestC_CentralDifference()
             if (err > 1e-8) ok = false;
         }
     }
-    std::printf("     最差 |自动微分 - 中心差分| = %.3e\n", worst);
-    ck.check(ok, std::string("[C1] 20 组 (4 点 x 5 函数) 全部 <= 1e-8"));
+    std::printf("[apply] 最差 |自动微分 - 中心差分| = %.3e\n", worst);
+
+    { STEP("[C1] 20 组 (4 点 x 5 函数) 全部 <= 1e-8");
+      EXPECT_TRUE(ok) << "最差 = " << worst; }
 }
 
 // ===========================================================================
 // [D] grad_graph 真实路径: Function / MatrixFunction (改用例里从未跑过)
 // ===========================================================================
-static void TestD_GradGraphFunctionNodes()
+TEST(Apply, GradGraphFunctionNodes)
 {
-    std::printf("\n[D] grad_graph: Function / MatrixFunction 节点 (真实调用路径)\n");
-
     // Function 节点: y = sin(x), x = 0.7
     {
         Matrix<FunctionType> F(1, 1, std::vector<FunctionType>{FunctionType::Sin});
@@ -265,7 +310,8 @@ static void TestD_GradGraphFunctionNodes()
         fn->Forward();
         bool ok = std::fabs(fn->matrix(0, 0).value  - std::sin(0.7)) < 1e-15
                && std::fabs(fn->matrix(0, 0).derive - std::cos(0.7)) < 1e-14;
-        ck.check(ok, std::string("[D1] Function(sin) 前向 value + derive"));
+        { STEP("[D1] Function(sin) 前向 value + derive");
+          EXPECT_TRUE(ok); }
     }
 
     // MatrixFunction 节点: y = [sin(x0), exp(x1)]
@@ -282,7 +328,8 @@ static void TestD_GradGraphFunctionNodes()
                && std::fabs(fn->matrix(0, 0).derive - std::cos(0.7)) < 1e-14
                && std::fabs(fn->matrix(1, 0).value  - std::exp(1.2)) < 1e-15
                && std::fabs(fn->matrix(1, 0).derive - std::exp(1.2)) < 1e-14;
-        ck.check(ok, std::string("[D2] MatrixFunction([sin, exp]) 逐格不同 + derive"));
+        { STEP("[D2] MatrixFunction([sin, exp]) 逐格不同 + derive");
+          EXPECT_TRUE(ok); }
     }
 
     // MatrixFunction 的退化路径 (1x1 函数矩阵 -> 落回统一应用重载)
@@ -295,16 +342,16 @@ static void TestD_GradGraphFunctionNodes()
         fn->Forward();
         bool ok = std::fabs(fn->matrix(0, 0).value  - 1.5) < 1e-15
                && std::fabs(fn->matrix(0, 0).derive - (0.5 / 1.5)) < 1e-14;
-        ck.check(ok, std::string("[D3] MatrixFunction 退化 (1x1 -> 统一应用) 路径"));
+        { STEP("[D3] MatrixFunction 退化 (1x1 -> 统一应用) 路径");
+          EXPECT_TRUE(ok); }
     }
 }
 
 // ===========================================================================
 // [E] 嵌套对偶 Dual<Dual<double>>: 二阶导 (修 dual.hpp 的 log ADL 断链)
 // ===========================================================================
-static void TestE_NestedDualSecondOrder()
+TEST(Apply, NestedDualSecondOrder)
 {
-    std::printf("\n[E] 嵌套对偶: ln / pow 的二阶导 (dual.hpp log 断链回归)\n");
     using DD = Dual<Dual<double>>;
 
     // seed: value.derive = 1 (第一方向), derive.value = 1 (第二方向)
@@ -318,12 +365,13 @@ static void TestE_NestedDualSecondOrder()
         const double v  = y.value.value;
         const double d1 = y.value.derive;
         const double d2 = y.derive.derive;
-        std::printf("     ln : v=%.15g d1=%.15g d2=%.15g\n", v, d1, d2);
+        std::printf("[apply] ln : v=%.15g d1=%.15g d2=%.15g\n", v, d1, d2);
         bool ok = std::fabs(v  - std::log(x0)) < 1e-15
                && std::fabs(d1 - 1.0 / x0)     < 1e-15
                && std::fabs(d2 - (-1.0 / (x0 * x0))) < 1e-14;
         // 这段在修 log 断链之前**根本编不过** (no matching function for call to 'log')
-        ck.check(ok, std::string("[E1] ln(Dual<Dual<double>>): v / f' / f'' 三阶全对"));
+        { STEP("[E1] ln(Dual<Dual<double>>): v / f' / f'' 三阶全对");
+          EXPECT_TRUE(ok); }
     }
 
     // pow: f = x^3, f' = 3x^2 = 12, f'' = 6x = 12  (x0=2)
@@ -333,11 +381,12 @@ static void TestE_NestedDualSecondOrder()
         const double v  = z.value.value;
         const double d1 = z.value.derive;
         const double d2 = z.derive.derive;
-        std::printf("     x^3: v=%.15g d1=%.15g d2=%.15g\n", v, d1, d2);
+        std::printf("[apply] x^3: v=%.15g d1=%.15g d2=%.15g\n", v, d1, d2);
         bool ok = std::fabs(v  - 8.0)  < 1e-13
                && std::fabs(d1 - 12.0) < 1e-13
                && std::fabs(d2 - 12.0) < 1e-13;
-        ck.check(ok, std::string("[E2] pow(Dual<Dual<double>>, 3): v / f' / f'' 三阶全对"));
+        { STEP("[E2] pow(Dual<Dual<double>>, 3): v / f' / f'' 三阶全对");
+          EXPECT_TRUE(ok); }
     }
 
     // exp / sin 也走一遍 (它们的嵌套链本来就通, 作为对照)
@@ -348,47 +397,37 @@ static void TestE_NestedDualSecondOrder()
         auto ys = sin(x);
         bool ok_s = std::fabs(ys.value.value - std::sin(x0)) < 1e-15
                  && std::fabs(ys.derive.derive - (-std::sin(x0))) < 1e-14;
-        ck.check(ok_e, std::string("[E3] exp 嵌套对照 (链本就通)"));
-        ck.check(ok_s, std::string("[E4] sin 嵌套对照 (链本就通)"));
+        { STEP("[E3] exp 嵌套对照 (链本就通)"); EXPECT_TRUE(ok_e); }
+        { STEP("[E4] sin 嵌套对照 (链本就通)"); EXPECT_TRUE(ok_s); }
     }
 }
 
 // ===========================================================================
 // [F] 维度不匹配 -> throw
 // ===========================================================================
-static void TestF_DimensionMismatch()
+TEST(Apply, DimensionMismatch)
 {
-    std::printf("\n[F] 维度不匹配 -> throw\n");
     // 列向量约定: A 是 3x1, 函数矩阵误给成 2x1 (长度不符)
     Matrix<double> A(3, 1);
     Matrix<FunctionType> F(2, 1, std::vector<FunctionType>{
         FunctionType::Sin, FunctionType::Cos});
 
-    bool threw = false;
-    try { (void)Apply(A, F); } catch (const std::invalid_argument&) { threw = true; }
-    ck.check(threw, std::string("[F1] 标量版: A 3x1 vs f 2x1 -> invalid_argument"));
+    { STEP("[F1] 标量版: A 3x1 vs f 2x1 -> invalid_argument");
+      EXPECT_EXACT_THROW((void)Apply(A, F), std::invalid_argument); }
 
     Matrix<D> Ad(3, 1);
-    bool threw_u = false;
-    try { (void)Apply(Ad, F); } catch (const std::invalid_argument&) { threw_u = true; }
-    ck.check(threw_u, std::string("[F2] Dual 版: 同样 throw"));
+    { STEP("[F2] Dual 版: 同样 throw");
+      EXPECT_EXACT_THROW((void)Apply(Ad, F), std::invalid_argument); }
 
     // 反向对照: 1x1 函数矩阵应当**广播**, 不抛 (否则上面的 throw 可能只是"见到非同形就抛")
+    //
+    // 这里**不用** gtest_common.hpp 的 EXPECT_NO_THROW_STMT: 它内部实例化
+    // CheckExactThrow<std::exception>, 其中的 `catch (const E&)` + `catch (const
+    // std::exception&)` 会被 clang 判为 "earlier handler" 警告 (-Wexceptions) ——
+    // E = std::exception 时两条 catch 同型, 后一条死。要修得改公共头, 不在本次迁移范围。
     Matrix<FunctionType> F1(1, 1, std::vector<FunctionType>{FunctionType::Sin});
     bool ok_bcast = false;
     try { (void)Apply(A, F1); ok_bcast = true; } catch (const std::exception&) { ok_bcast = false; }
-    ck.check(ok_bcast, std::string("[F3] 1x1 函数矩阵 -> 广播, 不抛"));
-}
-
-// ===========================================================================
-
-int main()
-{
-    TestA_AllOverloadsAllDomains();
-    TestB_AnalyticDerivWide();
-    TestC_CentralDifference();
-    TestD_GradGraphFunctionNodes();
-    TestE_NestedDualSecondOrder();
-    TestF_DimensionMismatch();
-    return CheckReport(ck.ok, ck.fail, "autodiff/apply");
+    { STEP("[F3] 1x1 函数矩阵 -> 广播, 不抛");
+      EXPECT_TRUE(ok_bcast); }
 }

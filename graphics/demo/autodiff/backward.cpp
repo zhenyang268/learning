@@ -34,10 +34,47 @@
 //
 // 本用例覆盖 [A]~[D]; [E] **如实断言占位算子仍不可用** (不假装它可用 —— 照抄 smoke.cpp 的规矩)。
 //
+// ---------------------------------------------------------------------------
+// 框架: googletest (2026-10-30 迁移)
+// ---------------------------------------------------------------------------
+//   · 老写法的 `main()` + `Checker` 计分板**已删除** (GTest::gtest_main 提供 main)。
+//   · 迁移前 31 项断言。迁移后 34 条:
+//       条文变多的只有 [E] 段 —— 老写法把「Forward 抛 + Backward 抛」压成**一条**
+//       bool 聚合, 现在按硬规则 5 用 EXPECT_EXACT_THROW 逐条判, 于是 [E1] 1→2、[E3] 1→3。
+//       **没有合并、没有放宽**, 只是把"抛哪种"从 `catch(logic_error&)` 变成精确类型。
+//   · [F] 段是"同一份模板跑 float 与 Complex<double>" ⇒ 由 TYPED_TEST_SUITE 保证两域,
+//     阈值随域不同 (float 1e-4 / Complex 1e-12), 故塞进 fixture 的静态成员。
+//   · 判据编号 [A1]–[F] 全部保留, 通过 SCOPED_TRACE 携带。
+//
+// ---------------------------------------------------------------------------
+// 判据边界表 (格式见 demo/README.md §4.3.1)
+// ---------------------------------------------------------------------------
+//   段 | 阈值                          | 边界 / 病态输入              | 专抓什么错
+//  ----|-------------------------------|------------------------------|--------------------------
+//   A  | 值 1e-14; 伴随 1e-13; 差分 1e-8| x=[2,3] w=[5,7] b=0.5        | Backward 整体不可用 (原版直接 throw)
+//   B  | 1e-15 / 精确整数比较          | **12 个算子各一条**, 手按形状初始化 adjoint | 某算子伴随公式缺失/静默 no-op
+//   C  | 1e-13 / Size()                | Output 透传, 默认播种全 1     | adjoint 未自动初始化 (0x0 必抛)
+//   D  | 1e-15                         | 连跑两次 Backward             | 伴随**累加**导致第二次翻倍
+//   E  | **异常类型精确到子类**        | CWisePow / Inverse / Sigmoid  | 空 body 的静默 0 被当成"实现了"
+//   F  | float 1e-4 / Complex 1e-12    | 最小闭环换域再实例化          | 只在 double 域实例化过 (模板 bug)
+//
+// ---------------------------------------------------------------------------
+// 已知盲区 (注入对照的方案写在这里)
+// ---------------------------------------------------------------------------
+//  ① **[B6] Transpose 是唯一能抓"用原值而不是上游伴随"的判据** ——
+//     那条判据同时查形状 (2x1) 与数值, 因为原版的错法两样都坏。
+//  ② **[D] 幂等是唯一能抓"Backward 不清零、靠 += 累加"的判据**:
+//     [A]/[B] 都只跑一次, 单次结果无法区分 `=` 与 `+=`。
+//  ③ **[E] 段是"占位如实断言"** —— 它绿不代表算子可用, 只代表"仍然明确 throw"。
+//     实现之后本段必须改成数值对拍 (FAIL 即提醒)。
+//  ④ **[C] 与 [A] 有重叠** (都依赖自动初始化), 但 [C] 是**唯一**直接断言
+//     `adjoint.Size()` 从 0 变成 n 的判据 —— 数值全对也可能形状先被别处建好。
+//
 // 运行: ./graphics/run_tests.sh          (注册名: backward)
 //       ./graphics/build/demo/autodiff/backward
 
-#include "../common.hpp"
+#include "gtest_common.hpp"
+
 #include "autodiff/dual.hpp"
 #include "autodiff/grad_graph.hpp"
 #include "autodiff/jacobian.hpp"
@@ -50,48 +87,47 @@
 #include <type_traits>
 #include <vector>
 
+namespace
+{
+
 using D    = Dual<double>;
 using Node = GradNode<D>;
 using P    = std::shared_ptr<Node>;
 
-static Checker ck;
-
 // Nx1 **列**向量 (D19 第二次修订, 2026-10-19: 全库统一列向量 + 分子布局)
-static Matrix<D> MV(const std::vector<double>& vs, double seed = 0.0)
+Matrix<D> MV(const std::vector<double>& vs, double seed = 0.0)
 {
     std::vector<D> d;
     for (double v : vs) d.emplace_back(v, seed);
     return Matrix<D>((int)vs.size(), 1, d);
 }
 // NxM
-static Matrix<D> MM(const std::vector<std::vector<double>>& rows)
+Matrix<D> MM(const std::vector<std::vector<double>>& rows)
 {
     const int r = (int)rows.size(), c = (int)rows[0].size();
     std::vector<D> d;
     for (auto& row : rows) for (double v : row) d.emplace_back(v, 0.0);
     return Matrix<D>(r, c, d);
 }
-static P Leaf(const Matrix<D>& m) { return std::make_shared<Node>(GradOp::Input, m); }
-static P Op(GradOp op, const std::vector<P>& ins, int r = 1, int c = 1)
+P Leaf(const Matrix<D>& m) { return std::make_shared<Node>(GradOp::Input, m); }
+P Op(GradOp op, const std::vector<P>& ins, int r = 1, int c = 1)
 {
     auto n = std::make_shared<Node>(op, Matrix<D>(r, c));
     for (auto& x : ins) n->FillInput(x);
     return n;
 }
-static P OpF(GradOp op, const std::vector<P>& ins,
-             const std::vector<FunctionType>& fs, int r, int c)
+P OpF(GradOp op, const std::vector<P>& ins,
+      const std::vector<FunctionType>& fs, int r, int c)
 {
     auto n = std::make_shared<Node>(op, Matrix<FunctionType>(r, c, fs));
     for (auto& x : ins) n->FillInput(x);
     return n;
 }
 // 读伴随的 value 分量 (约定: adjoint 只用 value)
-static double AV(const P& n, int i = 0) { return n->adjoint.Data()[i].value; }
+double AV(const P& n, int i = 0) { return n->adjoint.Data()[i].value; }
 
-// ===========================================================================
-// [A] 最小闭环 y = sum(w ⊙ x) + b —— 三方对拍
-// ===========================================================================
-static double MakeY(const std::vector<double>& xv)
+// [A] 段用的"重建一次图再前向" —— 中心差分的参考实现
+double MakeY(const std::vector<double>& xv)
 {
     auto x = Leaf(MV(xv)); auto w = Leaf(MV({5, 7})); auto b = Leaf(MV({0.5}));
     auto m = Op(GradOp::CWiseMult, {x, w}, 2, 1);
@@ -102,256 +138,19 @@ static double MakeY(const std::vector<double>& xv)
     return y->matrix(0, 0).value;
 }
 
-static void TestA_MinLoop()
-{
-    std::printf("\n[A] 最小闭环 y = sum(w ⊙ x) + b   x=[2,3] w=[5,7] b=0.5\n");
-    auto x = Leaf(MV({2, 3}));
-    auto w = Leaf(MV({5, 7}));
-    auto b = Leaf(MV({0.5}));
-    auto m = Op(GradOp::CWiseMult, {x, w}, 2, 1);
-    auto s = Op(GradOp::SumAll, {m}, 1, 1);
-    auto y = Op(GradOp::Add, {s, b}, 1, 1);
-
-    ComputationGraph<D> g(x, y);
-    g.Forward();
-    ck.check(std::fabs(y->matrix(0, 0).value - 31.5) < 1e-14, std::string("[A1] 前向 y = 31.5"));
-
-    g.Backward();      // 原版此处直接 throw
-    ck.check(std::fabs(AV(x, 0) - 5.0) < 1e-13, std::string("[A2] dy/dx0 = w0 = 5"));
-    ck.check(std::fabs(AV(x, 1) - 7.0) < 1e-13, std::string("[A3] dy/dx1 = w1 = 7"));
-    ck.check(std::fabs(AV(w, 0) - 2.0) < 1e-13, std::string("[A4] dy/dw0 = x0 = 2"));
-    ck.check(std::fabs(AV(w, 1) - 3.0) < 1e-13, std::string("[A5] dy/dw1 = x1 = 3"));
-    ck.check(std::fabs(AV(b, 0) - 1.0) < 1e-13, std::string("[A6] dy/db  = 1"));
-
-    // 独立判据 1: 中心差分
-    {
-        const double h = 1e-6;
-        ck.check(std::fabs((MakeY({2+h,3}) - MakeY({2-h,3})) / (2*h) - 5.0) < 1e-8,
-                 std::string("[A7] dy/dx0 vs 中心差分"));
-    }
-    // 独立判据 2: 前向模式 (Dual seed) 对拍 —— 两条独立实现路径
-    {
-        auto x2 = Leaf(MV({2,3})); auto w2 = Leaf(MV({5,7})); auto b2 = Leaf(MV({0.5}));
-        auto m2 = Op(GradOp::CWiseMult, {x2, w2}, 2, 1);
-        auto s2 = Op(GradOp::SumAll, {m2}, 1, 1);
-        auto y2 = Op(GradOp::Add, {s2, b2}, 1, 1);
-        ComputationGraph<D> g2(x2, y2);
-        x2->matrix(0, 0).derive = 1.0;      // 只给 x0 播种
-        g2.Forward();
-        ck.check(std::fabs(y2->matrix(0, 0).derive - 5.0) < 1e-13,
-                 std::string("[A8] dy/dx0 vs 前向模式"));
-    }
-}
-
-// ===========================================================================
-// [B] 逐算子 Backward: 12 个可用算子
-// ===========================================================================
-static void TestB_PerOperator()
-{
-    std::printf("\n[B] 逐算子 Backward (手动按形状初始化 adjoint)\n");
-
-    {   // Add
-        auto x1 = Leaf(MV({1,2})), x2 = Leaf(MV({2,3}));
-        auto y = Op(GradOp::Add, {x1,x2}, 2, 1); y->Forward();
-        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(AV(x1,0)==1 && AV(x1,1)==1 && AV(x2,0)==1 && AV(x2,1)==1,
-                 std::string("[B1] Add  -> [1,1] / [1,1]"));
-    }
-    {   // Sub
-        auto x1 = Leaf(MV({1,2})), x2 = Leaf(MV({2,3}));
-        auto y = Op(GradOp::Sub, {x1,x2}, 2, 1); y->Forward();
-        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(AV(x1,0)==1 && AV(x2,0)==-1 && AV(x2,1)==-1,
-                 std::string("[B2] Sub  -> [1,1] / [-1,-1]"));
-    }
-    {   // Mult (原版缺 case, 静默 no-op)
-        auto x1 = Leaf(MV({2,3})), x2 = Leaf(MV({5,7}));
-        auto y = Op(GradOp::Mult, {x1,x2}, 2, 1); y->Forward();
-        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(AV(x1,0)==5 && AV(x1,1)==7 && AV(x2,0)==2 && AV(x2,1)==3,
-                 std::string("[B3] Mult -> [5,7] / [2,3]  (原来静默 no-op)"));
-    }
-    {   // CWiseMult
-        auto x1 = Leaf(MV({2,3})), x2 = Leaf(MV({5,7}));
-        auto y = Op(GradOp::CWiseMult, {x1,x2}, 2, 1); y->Forward();
-        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(AV(x1,0)==5 && AV(x2,1)==3,
-                 std::string("[B4] CWiseMult -> [5,7] / [2,3]"));
-    }
-    {   // Divide (原版 node1 用矩阵乘, 抛异常) —— 期望 1/x2 与 -x1/x2^2
-        auto x1 = Leaf(MV({6,8})), x2 = Leaf(MV({2,4}));
-        auto y = Op(GradOp::Divide, {x1,x2}, 2, 1); y->Forward();
-        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(std::fabs(AV(x1,0)-0.5)<1e-15 && std::fabs(AV(x1,1)-0.25)<1e-15 &&
-                 std::fabs(AV(x2,0)+1.5)<1e-15 && std::fabs(AV(x2,1)+0.5)<1e-15,
-                 std::string("[B5] Divide -> 1/x2=[0.5,0.25] / -x1/x2^2=[-1.5,-0.5]"));
-    }
-    {   // Transpose (原版用原值 + `=`, 静默错)
-        auto x = Leaf(MV({1,2}));                  // 2x1 列
-        auto y = Op(GradOp::Transpose, {x}, 1, 2); // 输出 1x2
-        y->Forward();
-        y->adjoint = MM({{1,1}});                  // 1x2
-        x->adjoint = MV({0,0});                    // 2x1
-        y->Backward();
-        ck.check(x->adjoint.Rows()==2 && x->adjoint.Cols()==1 && AV(x,0)==1 && AV(x,1)==1,
-                 std::string("[B6] Transpose -> [1,1] 且形状 (2x1) 正确"));
-    }
-    {   // SumAll
-        auto x = Leaf(MV({2,3}));
-        auto y = Op(GradOp::SumAll, {x}, 1, 1); y->Forward();
-        y->adjoint = MV({1}); x->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(AV(x,0)==1 && AV(x,1)==1, std::string("[B7] SumAll -> [1,1]"));
-    }
-    {   // MultAll (原版维度不匹配, 抛异常) —— 期望 [x1, x0] = [3, 2]
-        auto x = Leaf(MV({2,3}));
-        auto y = Op(GradOp::MultAll, {x}, 1, 1); y->Forward();
-        y->adjoint = MV({1}); x->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(AV(x,0)==3 && AV(x,1)==2, std::string("[B8] MultAll -> [x1,x0]=[3,2]"));
-    }
-    {   // MatrixMult (列向量): y = W·x, W 2x3, x 3x1
-        //   期望 dW = ā_y·xᵀ (2x3 全 1), dx = Wᵀ·ā_y = [5,7,9]
-        //   旧版是 1x2 · 2x1 的点积, 只覆盖了 Row·Col 一种形状; 现改成非方阵, 两侧都查。
-        auto W = Leaf(MM({{1,2,3},{4,5,6}}));
-        auto x = Leaf(MV({1,1,1}));
-        auto y = Op(GradOp::MatrixMult, {W,x}, 2, 1); y->Forward();
-        y->adjoint = MV({1,1});
-        W->adjoint = MM({{0,0,0},{0,0,0}});
-        x->adjoint = MV({0,0,0});
-        y->Backward();
-        ck.check(W->adjoint.Rows()==2 && W->adjoint.Cols()==3
-                 && AV(W,0)==1 && AV(W,5)==1
-                 && std::fabs(AV(x,0)-5)<1e-14 && std::fabs(AV(x,1)-7)<1e-14
-                 && std::fabs(AV(x,2)-9)<1e-14,
-                 std::string("[B9] MatrixMult W(2x3)·x(3x1) -> dW 全 1 / dx=[5,7,9]"));
-    }
-    {   // Function (原版矩阵乘, 抛异常; 且 Derive(Apply) 依赖种子)
-        auto x = Leaf(MV({2,3}));
-        auto y = OpF(GradOp::Function, {x}, {FunctionType::Sin}, 1, 1); y->Forward();
-        y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(std::fabs(AV(x,0)-std::cos(2.0))<1e-14 &&
-                 std::fabs(AV(x,1)-std::cos(3.0))<1e-14,
-                 std::string("[B10] Function(sin) -> [cos2, cos3]"));
-    }
-    {   // MatrixFunction
-        auto x = Leaf(MV({2,3}));
-        auto y = OpF(GradOp::MatrixFunction, {x}, {FunctionType::Sin, FunctionType::Exp}, 2, 1);
-        y->Forward();
-        y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(std::fabs(AV(x,0)-std::cos(2.0))<1e-14 &&
-                 std::fabs(AV(x,1)-std::exp(3.0))<1e-14,
-                 std::string("[B11] MatrixFunction([sin,exp]) -> [cos2, exp3]"));
-    }
-    {   // Output (原版缺 case, 静默 no-op)
-        auto x = Leaf(MV({1,2}));
-        auto y = Op(GradOp::Output, {x}, 2, 1); y->Forward();
-        y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(AV(x,0)==1 && AV(x,1)==1,
-                 std::string("[B12] Output 透传 -> [1,1]  (原来静默 no-op)"));
-    }
-    {   // 叶子与常量: 显式 case, 无副作用
-        auto x = Leaf(MV({1,2}));
-        auto y = Op(GradOp::Constant, {x}, 2, 1); y->Forward();
-        y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
-        y->Backward();
-        ck.check(AV(x,0)==0 && AV(x,1)==0, std::string("[B13] Constant -> [0,0] (不回传)"));
-    }
-}
-
-// ===========================================================================
-// [C] adjoint 形状初始化 (原版此处必抛 Matrix dimension mismatch)
-// ===========================================================================
-static void TestC_AutoInit()
-{
-    std::printf("\n[C] ComputationGraph::Backward 自动做形状初始化\n");
-    auto x = Leaf(MV({2,3}));
-    auto y = Op(GradOp::Output, {x}, 2, 1);
-    ComputationGraph<D> g(x, y);
-    g.Forward();
-
-    ck.check(x->adjoint.Size() == 0, std::string("[C1] Forward 后 adjoint 仍是空的 (与原来一样)"));
-
-    bool threw = false;
-    try { g.Backward(); } catch (const std::exception&) { threw = true; }
-    ck.check(!threw, std::string("[C2] Backward 不再抛 (原版必抛)"));
-    ck.check(x->adjoint.Size() == 2, std::string("[C3] adjoint 形状已由 Backward 自动建立"));
-    ck.check(AV(x,0)==1 && AV(x,1)==1, std::string("[C4] 默认播种全 1 -> 透传出 [1,1]"));
-}
-
-// ===========================================================================
-// [D] 幂等: 连跑两次结果不变
-// ===========================================================================
-static void TestD_Idempotent()
-{
-    std::printf("\n[D] 连跑两次 Backward\n");
-    auto x = Leaf(MV({2, 3}));
-    auto w = Leaf(MV({5, 7}));
-    auto m = Op(GradOp::CWiseMult, {x, w}, 2, 1);
-    auto y = Op(GradOp::SumAll, {m}, 1, 1);
-    ComputationGraph<D> g(x, y);
-    g.Forward();
-    g.Backward();
-    const double first = AV(x, 0);
-    g.Backward();
-    ck.check(std::fabs(AV(x,0) - first) < 1e-15 && std::fabs(first - 5.0) < 1e-13,
-             std::string("[D1] 二次 Backward 仍得 dy/dx0 = 5"));
-}
-
-// ===========================================================================
-// [E] 占位算子: 如实断言"仍不可用", 不假装可用
-//     (将来实现后, 本段应改为数值对拍 —— FAIL 即提醒更新用例)
-// ===========================================================================
-static void TestE_Placeholders()
-{
-    std::printf("\n[E] 占位算子 (如实记录现状)\n");
-
-    {   // CWisePow: Forward 与 Backward 都未实现
-        auto x = Leaf(MV({2}));
-        auto y = Op(GradOp::CWisePow, {x}, 1, 1);
-        bool fwd_threw = false, bwd_threw = false;
-        try { y->Forward(); } catch (const std::logic_error&) { fwd_threw = true; }
-        y->adjoint = MV({1}); x->adjoint = MV({0});
-        try { y->Backward(); } catch (const std::logic_error&) { bwd_threw = true; }
-        ck.check(fwd_threw && bwd_threw, std::string("[E1] CWisePow: 前后向都明确 throw (不再静默)"));
-    }
-    {   // Inverse: Forward 仍为占位 (注释"待 linalg::Inverse 落地"已过期)
-        auto x = Leaf(MV({3}));
-        auto y = Op(GradOp::Inverse, {x}, 1, 1);
-        bool threw = false;
-        try { y->Forward(); } catch (const std::logic_error&) { threw = true; }
-        ck.check(threw, std::string("[E2] Inverse: Forward 仍 throw (占位)"));
-    }
-    {   // Sigmoid: Forward throw, Backward 是**空 body** ⇒ 静默 0
-        auto x = Leaf(MV({0.5}));
-        auto y = Op(GradOp::Sigmoid, {x}, 1, 1);
-        bool threw = false;
-        try { y->Forward(); } catch (const std::logic_error&) { threw = true; }
-        y->adjoint = MV({1}); x->adjoint = MV({0});
-        y->Backward();          // 不抛
-        ck.check(threw && AV(x, 0) == 0.0,
-                 std::string("[E3] Sigmoid: Forward throw + Backward 空 body ⇒ 静默 0 (待实现)"));
-    }
-}
-
-// ===========================================================================
-// [F] 分域: 同一份 grad_graph 在 Dual<float> / Dual<Complex<double>> 下各实例化一次
-//     (graphics 3.3 第 1 条: 模板 bug 只在实例化时暴露; 单域探针连续误判过 5 次)
-//     2026-10-17 这两个域只在 /tmp 探针里跑过、没进 ctest —— 本条把证据固化。
-// ===========================================================================
+// [F] 段的分域阈值: float 放宽到 1e-4 (float eps ≈ 1.2e-7 经求和放大), Complex 1e-12
 template <typename T>
-static void RunMinLoopDomain(Checker& ck, const char* tag, double tol)
+struct DomainTol { static constexpr double value = 1e-12; };
+template <>
+struct DomainTol<float> { static constexpr double value = 1e-4; };
+
+// [F] 段: 最小闭环在任意域上跑一遍
+template <typename T>
+bool RunMinLoopDomain()
 {
     using DQ = Dual<T>;
     using N  = GradNode<DQ>;
+    const double tol = DomainTol<T>::value;
 
     auto mk = [](double v) { return ScalarTraits<T>::fromReal(v); };
 
@@ -387,27 +186,286 @@ static void RunMinLoopDomain(Checker& ck, const char* tag, double tol)
         }
     };
 
-    const bool ok = near(x->adjoint.Data()[0].value, 5.0)
-                 && near(x->adjoint.Data()[1].value, 7.0)
-                 && near(w->adjoint.Data()[0].value, 2.0)
-                 && near(w->adjoint.Data()[1].value, 3.0)
-                 && near(b->adjoint.Data()[0].value, 1.0);
-    ck.check(ok, std::string("[F] ") + tag + " 最小闭环 dx=[5,7] dw=[2,3] db=1");
+    return near(x->adjoint.Data()[0].value, 5.0)
+        && near(x->adjoint.Data()[1].value, 7.0)
+        && near(w->adjoint.Data()[0].value, 2.0)
+        && near(w->adjoint.Data()[1].value, 3.0)
+        && near(b->adjoint.Data()[0].value, 1.0);
+}
+
+}  // namespace
+
+#define STEP(label) SCOPED_TRACE(label)
+
+// ===========================================================================
+// [A] 最小闭环 y = sum(w ⊙ x) + b —— 三方对拍
+// ===========================================================================
+TEST(Backward, MinimumLoop)
+{
+    // x=[2,3] w=[5,7] b=0.5
+    auto x = Leaf(MV({2, 3}));
+    auto w = Leaf(MV({5, 7}));
+    auto b = Leaf(MV({0.5}));
+    auto m = Op(GradOp::CWiseMult, {x, w}, 2, 1);
+    auto s = Op(GradOp::SumAll, {m}, 1, 1);
+    auto y = Op(GradOp::Add, {s, b}, 1, 1);
+
+    ComputationGraph<D> g(x, y);
+    g.Forward();
+    { STEP("[A1] 前向 y = 31.5");
+      EXPECT_LT(std::fabs(y->matrix(0, 0).value - 31.5), 1e-14); }
+
+    g.Backward();      // 原版此处直接 throw
+    { STEP("[A2] dy/dx0 = w0 = 5"); EXPECT_LT(std::fabs(AV(x, 0) - 5.0), 1e-13); }
+    { STEP("[A3] dy/dx1 = w1 = 7"); EXPECT_LT(std::fabs(AV(x, 1) - 7.0), 1e-13); }
+    { STEP("[A4] dy/dw0 = x0 = 2"); EXPECT_LT(std::fabs(AV(w, 0) - 2.0), 1e-13); }
+    { STEP("[A5] dy/dw1 = x1 = 3"); EXPECT_LT(std::fabs(AV(w, 1) - 3.0), 1e-13); }
+    { STEP("[A6] dy/db  = 1");      EXPECT_LT(std::fabs(AV(b, 0) - 1.0), 1e-13); }
+
+    // 独立判据 1: 中心差分
+    {
+        const double h = 1e-6;
+        { STEP("[A7] dy/dx0 vs 中心差分");
+          EXPECT_LT(std::fabs((MakeY({2+h,3}) - MakeY({2-h,3})) / (2*h) - 5.0), 1e-8); }
+    }
+    // 独立判据 2: 前向模式 (Dual seed) 对拍 —— 两条独立实现路径
+    {
+        auto x2 = Leaf(MV({2,3})); auto w2 = Leaf(MV({5,7})); auto b2 = Leaf(MV({0.5}));
+        auto m2 = Op(GradOp::CWiseMult, {x2, w2}, 2, 1);
+        auto s2 = Op(GradOp::SumAll, {m2}, 1, 1);
+        auto y2 = Op(GradOp::Add, {s2, b2}, 1, 1);
+        ComputationGraph<D> g2(x2, y2);
+        x2->matrix(0, 0).derive = 1.0;      // 只给 x0 播种
+        g2.Forward();
+        { STEP("[A8] dy/dx0 vs 前向模式");
+          EXPECT_LT(std::fabs(y2->matrix(0, 0).derive - 5.0), 1e-13); }
+    }
 }
 
 // ===========================================================================
-
-int main()
+// [B] 逐算子 Backward: 12 个可用算子
+// ===========================================================================
+TEST(Backward, PerOperator)
 {
-    TestA_MinLoop();
-    TestB_PerOperator();
-    TestC_AutoInit();
-    TestD_Idempotent();
-    TestE_Placeholders();
+    {   // Add
+        auto x1 = Leaf(MV({1,2})), x2 = Leaf(MV({2,3}));
+        auto y = Op(GradOp::Add, {x1,x2}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B1] Add  -> [1,1] / [1,1]");
+          EXPECT_TRUE(AV(x1,0)==1 && AV(x1,1)==1 && AV(x2,0)==1 && AV(x2,1)==1); }
+    }
+    {   // Sub
+        auto x1 = Leaf(MV({1,2})), x2 = Leaf(MV({2,3}));
+        auto y = Op(GradOp::Sub, {x1,x2}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B2] Sub  -> [1,1] / [-1,-1]");
+          EXPECT_TRUE(AV(x1,0)==1 && AV(x2,0)==-1 && AV(x2,1)==-1); }
+    }
+    {   // Mult (原版缺 case, 静默 no-op)
+        auto x1 = Leaf(MV({2,3})), x2 = Leaf(MV({5,7}));
+        auto y = Op(GradOp::Mult, {x1,x2}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B3] Mult -> [5,7] / [2,3]  (原来静默 no-op)");
+          EXPECT_TRUE(AV(x1,0)==5 && AV(x1,1)==7 && AV(x2,0)==2 && AV(x2,1)==3); }
+    }
+    {   // CWiseMult
+        auto x1 = Leaf(MV({2,3})), x2 = Leaf(MV({5,7}));
+        auto y = Op(GradOp::CWiseMult, {x1,x2}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B4] CWiseMult -> [5,7] / [2,3]");
+          EXPECT_TRUE(AV(x1,0)==5 && AV(x2,1)==3); }
+    }
+    {   // Divide (原版 node1 用矩阵乘, 抛异常) —— 期望 1/x2 与 -x1/x2^2
+        auto x1 = Leaf(MV({6,8})), x2 = Leaf(MV({2,4}));
+        auto y = Op(GradOp::Divide, {x1,x2}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1}); x1->adjoint = MV({0,0}); x2->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B5] Divide -> 1/x2=[0.5,0.25] / -x1/x2^2=[-1.5,-0.5]");
+          EXPECT_TRUE(std::fabs(AV(x1,0)-0.5)<1e-15 && std::fabs(AV(x1,1)-0.25)<1e-15 &&
+                      std::fabs(AV(x2,0)+1.5)<1e-15 && std::fabs(AV(x2,1)+0.5)<1e-15); }
+    }
+    {   // Transpose (原版用原值 + `=`, 静默错)
+        auto x = Leaf(MV({1,2}));                  // 2x1 列
+        auto y = Op(GradOp::Transpose, {x}, 1, 2); // 输出 1x2
+        y->Forward();
+        y->adjoint = MM({{1,1}});                  // 1x2
+        x->adjoint = MV({0,0});                    // 2x1
+        y->Backward();
+        { STEP("[B6] Transpose -> [1,1] 且形状 (2x1) 正确");
+          EXPECT_TRUE(x->adjoint.Rows()==2 && x->adjoint.Cols()==1 && AV(x,0)==1 && AV(x,1)==1)
+              << "形状 " << x->adjoint.Rows() << "x" << x->adjoint.Cols(); }
+    }
+    {   // SumAll
+        auto x = Leaf(MV({2,3}));
+        auto y = Op(GradOp::SumAll, {x}, 1, 1); y->Forward();
+        y->adjoint = MV({1}); x->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B7] SumAll -> [1,1]"); EXPECT_TRUE(AV(x,0)==1 && AV(x,1)==1); }
+    }
+    {   // MultAll (原版维度不匹配, 抛异常) —— 期望 [x1, x0] = [3, 2]
+        auto x = Leaf(MV({2,3}));
+        auto y = Op(GradOp::MultAll, {x}, 1, 1); y->Forward();
+        y->adjoint = MV({1}); x->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B8] MultAll -> [x1,x0]=[3,2]"); EXPECT_TRUE(AV(x,0)==3 && AV(x,1)==2); }
+    }
+    {   // MatrixMult (列向量): y = W·x, W 2x3, x 3x1
+        //   期望 dW = ā_y·xᵀ (2x3 全 1), dx = Wᵀ·ā_y = [5,7,9]
+        //   旧版是 1x2 · 2x1 的点积, 只覆盖了 Row·Col 一种形状; 现改成非方阵, 两侧都查。
+        auto W = Leaf(MM({{1,2,3},{4,5,6}}));
+        auto x = Leaf(MV({1,1,1}));
+        auto y = Op(GradOp::MatrixMult, {W,x}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1});
+        W->adjoint = MM({{0,0,0},{0,0,0}});
+        x->adjoint = MV({0,0,0});
+        y->Backward();
+        { STEP("[B9] MatrixMult W(2x3)·x(3x1) -> dW 全 1 / dx=[5,7,9]");
+          EXPECT_TRUE(W->adjoint.Rows()==2 && W->adjoint.Cols()==3
+                      && AV(W,0)==1 && AV(W,5)==1
+                      && std::fabs(AV(x,0)-5)<1e-14 && std::fabs(AV(x,1)-7)<1e-14
+                      && std::fabs(AV(x,2)-9)<1e-14); }
+    }
+    {   // Function (原版矩阵乘, 抛异常; 且 Derive(Apply) 依赖种子)
+        auto x = Leaf(MV({2,3}));
+        auto y = OpF(GradOp::Function, {x}, {FunctionType::Sin}, 1, 1); y->Forward();
+        y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B10] Function(sin) -> [cos2, cos3]");
+          EXPECT_TRUE(std::fabs(AV(x,0)-std::cos(2.0))<1e-14 &&
+                      std::fabs(AV(x,1)-std::cos(3.0))<1e-14); }
+    }
+    {   // MatrixFunction
+        auto x = Leaf(MV({2,3}));
+        auto y = OpF(GradOp::MatrixFunction, {x}, {FunctionType::Sin, FunctionType::Exp}, 2, 1);
+        y->Forward();
+        y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B11] MatrixFunction([sin,exp]) -> [cos2, exp3]");
+          EXPECT_TRUE(std::fabs(AV(x,0)-std::cos(2.0))<1e-14 &&
+                      std::fabs(AV(x,1)-std::exp(3.0))<1e-14); }
+    }
+    {   // Output (原版缺 case, 静默 no-op)
+        auto x = Leaf(MV({1,2}));
+        auto y = Op(GradOp::Output, {x}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B12] Output 透传 -> [1,1]  (原来静默 no-op)");
+          EXPECT_TRUE(AV(x,0)==1 && AV(x,1)==1); }
+    }
+    {   // 叶子与常量: 显式 case, 无副作用
+        auto x = Leaf(MV({1,2}));
+        auto y = Op(GradOp::Constant, {x}, 2, 1); y->Forward();
+        y->adjoint = MV({1,1}); x->adjoint = MV({0,0});
+        y->Backward();
+        { STEP("[B13] Constant -> [0,0] (不回传)");
+          EXPECT_TRUE(AV(x,0)==0 && AV(x,1)==0); }
+    }
+}
 
-    std::printf("\n[F] 分域 (同一份源码换域再实例化)\n");
-    RunMinLoopDomain<float>(ck, "Dual<float>            ", 1e-4);
-    RunMinLoopDomain<Complex<double>>(ck, "Dual<Complex<double>>  ", 1e-12);
+// ===========================================================================
+// [C] adjoint 形状初始化 (原版此处必抛 Matrix dimension mismatch)
+// ===========================================================================
+TEST(Backward, AdjointAutoInit)
+{
+    auto x = Leaf(MV({2,3}));
+    auto y = Op(GradOp::Output, {x}, 2, 1);
+    ComputationGraph<D> g(x, y);
+    g.Forward();
 
-    return CheckReport(ck.ok, ck.fail, "autodiff/backward");
+    { STEP("[C1] Forward 后 adjoint 仍是空的 (与原来一样)");
+      EXPECT_EQ(x->adjoint.Size(), 0); }
+
+    { STEP("[C2] Backward 不再抛 (原版必抛)");
+      EXPECT_NO_THROW(g.Backward()); }
+    { STEP("[C3] adjoint 形状已由 Backward 自动建立");
+      EXPECT_EQ(x->adjoint.Size(), 2); }
+    { STEP("[C4] 默认播种全 1 -> 透传出 [1,1]");
+      EXPECT_TRUE(AV(x,0)==1 && AV(x,1)==1); }
+}
+
+// ===========================================================================
+// [D] 幂等: 连跑两次结果不变
+// ===========================================================================
+TEST(Backward, Idempotent)
+{
+    auto x = Leaf(MV({2, 3}));
+    auto w = Leaf(MV({5, 7}));
+    auto m = Op(GradOp::CWiseMult, {x, w}, 2, 1);
+    auto y = Op(GradOp::SumAll, {m}, 1, 1);
+    ComputationGraph<D> g(x, y);
+    g.Forward();
+    g.Backward();
+    const double first = AV(x, 0);
+    g.Backward();
+    { STEP("[D1] 二次 Backward 仍得 dy/dx0 = 5");
+      EXPECT_TRUE(std::fabs(AV(x,0) - first) < 1e-15 && std::fabs(first - 5.0) < 1e-13); }
+}
+
+// ===========================================================================
+// [E] 占位算子: 如实断言"仍不可用", 不假装可用
+//     (将来实现后, 本段应改为数值对拍 —— FAIL 即提醒更新用例)
+// ===========================================================================
+TEST(Backward, Placeholders)
+{
+    {   // CWisePow: Forward 与 Backward 都未实现
+        // 注意: CWisePow 是**二元**算子, 必须给 2 个输入, 否则先被 arity 守卫拦住
+        // (见下面 [E1b]) —— 那样就测不到这里的占位 throw 了。
+        auto x1 = Leaf(MV({2}));
+        auto x2 = Leaf(MV({3}));
+        auto y = Op(GradOp::CWisePow, {x1, x2}, 1, 1);
+        { STEP("[E1] CWisePow: Forward 明确 throw std::logic_error (占位)");
+          EXPECT_EXACT_THROW((void)y->Forward(), std::logic_error); }
+        y->adjoint = MV({1}); x1->adjoint = MV({0});
+        { STEP("[E1] CWisePow: Backward 明确 throw std::logic_error (占位)");
+          EXPECT_EXACT_THROW((void)y->Backward(), std::logic_error); }
+    }
+    {   // 2026-10-30 迁移时发现的事实 (老用例名与实测不符, 记在这里):
+        //   老写法 `Op(GradOp::CWisePow, {x}, 1, 1)` 只给 1 个输入, Forward 先撞上
+        //   grad_graph.hpp:118 的 arity 守卫 -> 抛 **invalid_argument**, 根本走不到
+        //   第 167 行的 logic_error 占位。老判据能过是因为 invalid_argument 派生自
+        //   logic_error (判基类假绿的又一实例)。这条把 arity 守卫本身钉住。
+        auto x = Leaf(MV({2}));
+        auto y = Op(GradOp::CWisePow, {x}, 1, 1);
+        { STEP("[E1b] CWisePow 缺第 2 个输入 -> throw std::invalid_argument (arity 守卫)");
+          EXPECT_EXACT_THROW((void)y->Forward(), std::invalid_argument); }
+    }
+    {   // Inverse: Forward 仍为占位 (注释"待 linalg::Inverse 落地"已过期)
+        auto x = Leaf(MV({3}));
+        auto y = Op(GradOp::Inverse, {x}, 1, 1);
+        { STEP("[E2] Inverse: Forward 仍 throw (占位)");
+          EXPECT_EXACT_THROW((void)y->Forward(), std::logic_error); }
+    }
+    {   // Sigmoid: Forward throw, Backward 是**空 body** ⇒ 静默 0
+        auto x = Leaf(MV({0.5}));
+        auto y = Op(GradOp::Sigmoid, {x}, 1, 1);
+        { STEP("[E3] Sigmoid: Forward throw");
+          EXPECT_EXACT_THROW((void)y->Forward(), std::logic_error); }
+        y->adjoint = MV({1}); x->adjoint = MV({0});
+        { STEP("[E3] Sigmoid: Backward 不抛 (空 body)");
+          EXPECT_NO_THROW(y->Backward()); }
+        { STEP("[E3] Sigmoid: Backward 空 body ⇒ 静默 0 (待实现)");
+          EXPECT_EQ(AV(x, 0), 0.0); }
+    }
+}
+
+// ===========================================================================
+// [F] 分域: 同一份 grad_graph 在 Dual<float> / Dual<Complex<double>> 下各实例化一次
+//     (graphics 3.3 第 1 条: 模板 bug 只在实例化时暴露; 单域探针连续误判过 5 次)
+//     2026-10-17 这两个域只在 /tmp 探针里跑过、没进 ctest —— 本条把证据固化。
+//     2026-10-30 迁到 gtest 后由 TYPED_TEST_SUITE 保证两域都跑 (阈值随域不同)。
+// ===========================================================================
+template <typename T>
+class BackwardDomainTest : public ::testing::Test {};
+
+using BackwardDomainTypes = ::testing::Types<float, Complex<double>>;
+TYPED_TEST_SUITE(BackwardDomainTest, BackwardDomainTypes);
+
+TYPED_TEST(BackwardDomainTest, MinimumLoopPerDomain)
+{
+    SCOPED_TRACE("[F] 最小闭环 dx=[5,7] dw=[2,3] db=1 (阈值随域: float 1e-4 / Complex 1e-12)");
+    EXPECT_TRUE(RunMinLoopDomain<TypeParam>());
 }
