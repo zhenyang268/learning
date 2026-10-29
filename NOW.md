@@ -129,19 +129,19 @@
 
 ---
 
-## 并行线：测试框架迁移（进行中，2026-10-30 起）
+## 并行线：测试框架迁移（已完成，2026-10-30）
 
-基础设施已完成、可跑：依赖脚本 `graphics/scripts/fetch_deps.sh`、gtest 接线、
+基础设施：依赖脚本 `graphics/scripts/fetch_deps.sh`、gtest 接线、
 `./graphics/run_tests.sh --coverage`、pytest 架子（细节见 `docs/logs/2026-10.md` 2026-10-30 条）。
 
-**剩余 15 个用例待迁**（此处不排先后）：`linalg/{solve,inverse,cholesky,eigen,svd,qr,dual_complex,expm,so3,smoke}`、
-`autodiff/{compute_graph,apply,backward,jacobian}`、`core/tensor`。
+**17 个 ctest 用例里 16 个已是 gtest**，逐个做过注入对照（明细同上日志）。
+唯一还是 legacy 的是 **`core/tensor`** —— 它**迁移与实现合并做**：
+24 条 `[P]` 是「断言仍 throw」的占位，先迁到 gtest 再实现等于写两遍。
 
-每条迁完的**唯一放行条件**：把它「判据边界表」里记的**注入对照重跑一遍**，
-确认新框架仍抓得住同一个 bug。抓不住就回退 —— 否则是用「看起来是测试」换掉「真的能抓错」。
-
-`tensor` 例外：**迁移与实现合并做**。它的 24 条 `[P]` 是「断言仍 throw」的占位，
-先迁到 gtest 再实现等于写两遍。
+迁移中新发现的**契约缺口**（要不要补由你定，均已登记 `graphics/test-map.md` §4.3）：
+`expm_pade` 的非方阵/空矩阵 throw、`inverse` 的 `diagonal_inverse` 近奇异与三个
+`logic_error` 分支、`eigen` 的 `eig_symmetric` 守卫与 Jacobi 迭代上限、`svd` 的内部错误、
+`jacobian` 3 参数版的两个守卫、`grad_graph` 里 `Cos`/`Log` 的局部导数分支。
 
 ---
 
